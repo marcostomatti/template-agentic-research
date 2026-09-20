@@ -1,7 +1,8 @@
 /**
  * @packageDocumentation
  * The dev-tools wiring: the ONE config `@ar/dev-tools` is mounted
- * with, and the three readings that fill it.
+ * with — the three readings that fill it, and the one feature it
+ * plugs in.
  *
  * `../main.tsx` reaches this module through a dynamic import behind
  * `import.meta.env.DEV`, so nothing here runs in a production build.
@@ -73,59 +74,185 @@
  * report filed from a fixture build and one filed against the service
  * are otherwise indistinguishable, and they are not the same bug.
  *
+ * ## One feature is configured, and it is handed this app's form
+ *
+ * {@link devToolsFeatures} plugs in `feedbackFeature()` and nothing
+ * else, so the menu gains one row. What the factory is told is one
+ * option: `renderForm`. Its `module` and `priority` are deliberately
+ * left unstated — the package already files a report under `web`,
+ * which is what this app IS, and a second spelling of it here would
+ * be a second place for the two to disagree.
+ *
+ * ## Why the form adapter lives in the APP rather than in the package
+ *
+ * Decision 9 of `.rafa/specs/q20b-2-feedback-feature.md`, read from
+ * this side of the seam. `@ar/dev-tools` depends on no design system
+ * — q20b-1's decision 2, and the reason a tool whose job includes
+ * reporting a broken stylesheet draws through none — so it ships a
+ * plain-HTML renderer of its own and leaves `renderForm` open for an
+ * app that has something better to draw with.
+ *
+ * This app has one: `src/dynamic-form/`, which draws an editable
+ * value from a `FieldDef` list in the shell's own language. The
+ * translation between the two vocabularies needs BOTH of them —
+ * `ReportFormField` from the package and `FieldDef` from the
+ * provider — and only one of the two repositories can hold both.
+ * Put in the package, that adapter would make `@ar/dev-tools` import
+ * `@ar/web`: the dependency this package's first law forbids
+ * outright, and backwards besides, since the package is the thing
+ * being ported out while the app is what stays behind.
+ *
+ * There is a second reason, and it outlives the first. The slot is
+ * how the widget survives a redesign of the app's form provider: a
+ * `FieldDef` union that grows a member, or a `DynamicForm` that
+ * changes how it reports an edit, moves `./reportFormAdapter.ts` and
+ * `./ReportForm.tsx` and touches nothing the package ships. The
+ * package's own renderer keeps working the whole time, which is what
+ * makes the default a fallback rather than dead code.
+ *
+ * So the mapping is `./reportFormAdapter.ts`, the drawing is
+ * `./ReportForm.tsx`, and what is LEFT for this file is the one line
+ * that names the app's component as the slot's value — a line rather
+ * than a module of its own, because both halves of the decision were
+ * already taken by the two files it stands in front of.
+ * {@link renderDevToolsReportForm} builds that element with
+ * `createElement` rather than JSX: this module is the config, it is a
+ * `.ts`, and it holds no markup beyond the one component name.
+ *
+ * ## ... and why the package's stylesheet is imported from HERE
+ *
+ * `@ar/dev-tools/styles.css` is the package's only stylesheet, it is
+ * imported from no module the package ships, and the consuming app
+ * opts in — the shape that stylesheet's own header records. This app
+ * had never written that opt-in, so the widget drew unstyled under
+ * `bun run dev`; issue #103 is the filing of it, and the side-effect
+ * import below is the close.
+ *
+ * It is written in THIS module rather than in `../styles.css`
+ * beside `tailwindcss` and `@ar/ui/styles.css`, because those two
+ * are reached from `../main.tsx` unconditionally and would carry the
+ * widget's rules into every production build. This module is reached
+ * only through `../main.tsx`'s `import.meta.env.DEV` branch, which a
+ * build replaces with `false` and then eliminates along with the
+ * dynamic import inside it, so the stylesheet is a dev-server-only
+ * asset for the same reason every other decision here is.
+ *
+ * Measured rather than asserted, over a `bun run build` of this
+ * package: `grep -c devtools` over the emitted stylesheet,
+ * `dist/assets/index-*.css`, answers `0`. The control is the same
+ * grep over that stylesheet CONCATENATED with
+ * `packages/dev-tools/dist/styles.css`, which answers `245` — so the
+ * zero is a reading that could have come out non-zero rather than a
+ * grep that matched nothing anywhere.
+ *
+ * `grep -rl devtools packages/web/dist/` does name one file, the JS
+ * bundle, and that hit is not this import: one occurrence, the string
+ * `devtools:` inside react-router's list of unsafe URL protocols. It
+ * predates this line. The capture of all of it is in this plan's
+ * close-out notes.
+ *
  * ## Mutation note — what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail. Each leg below was
  * measured by breaking this file, reds `bun x vitest run
- * src/dev/devtools.test.ts` from `packages/web` against the 12 cases
+ * src/dev/devtools.test.ts` from `packages/web` against the 20 cases
  * `./devtools.test.ts` holds, and restores this file byte-identical
  * (the harness compared the restored digest to the original, every
  * leg):
  *
  * - Dropping the `catch` from {@link probeDevToolsApiVersion} answers
- *   `Tests  1 failed | 11 passed (12)`: `answers null for a probe that
+ *   `Tests  1 failed | 19 passed (20)`: `answers null for a probe that
  *   rejects, rather than rejecting`, as `AssertionError: promise
  *   rejected "Error: offline" instead of resolving`.
  * - Nesting a value inside {@link devToolsExtra}'s record answers `2
- *   failed | 10 passed` — the flatness walk and the route case — which
- *   is what makes that walk a reading rather than a formality: it can
+ *   failed | 18 passed` — the flatness walk and the route case, that
+ *   one as `expected { path: '/digest' } to be '/digest'` — which is
+ *   what makes the walk a reading rather than a formality: it can
  *   fail, and this is the leg that proves it.
  * - Reporting the surface as `activeSurfaceId(path)` with no fallback
- *   answers `2 failed | 10 passed`: the path that names no surface and
+ *   answers `2 failed | 18 passed`: the path that names no surface and
  *   the index path, both `expected undefined to be 'none'`. The
  *   flatness walk does NOT trip on it, measured — the record it reads
  *   is on a path that HAS a surface — so those cases are not one
  *   reading taken twice.
  * - Reading the three defines as bare identifiers answers `1 failed |
- *   11 passed` with `ReferenceError: __DEVTOOLS_COMMIT__ is not
+ *   19 passed` with `ReferenceError: __DEVTOOLS_COMMIT__ is not
  *   defined`, raised from the unit runner, which is a build `define`
  *   never touched — the production build's shape as well.
+ * - Calling `feedbackFeature()` with no options — this file's whole
+ *   contribution to the report form, undone — answers `1 failed | 19
+ *   passed`: `hands the drawer the form renderer this app owns`, as
+ *   `expected undefined to be [Function renderDevToolsReportForm]`.
+ *   The widget still mounts and the row still opens; what is lost is
+ *   WHICH form it draws with, silently, since the package's own
+ *   renderer draws a working report either way. That single case is
+ *   the whole guard on it.
+ * - Spelling `module: 'ui'` here rather than leaving the package's
+ *   default answers `1 failed | 19 passed`: `leaves the filing module
+ *   at the package default`, as `expected 'ui' to be 'web'`.
+ * - Hoisting the list to a module constant, so every call answers one
+ *   shared feature, answers `1 failed | 19 passed`: `builds a fresh
+ *   feature per call`.
+ * - Copying {@link renderDevToolsReportForm}'s three arguments — a
+ *   spread of the fields, a spread of the values and an `onChange`
+ *   wrapper — answers `1 failed | 19 passed`: `passes the three slot
+ *   arguments on untouched`, failing on `Object.is equality` between
+ *   two records that read identically. Nothing but that case reports
+ *   it.
+ * - Answering `null` from that renderer answers `3 failed | 17
+ *   passed`, every renderer case at once, which is what says they are
+ *   readings of an element rather than of a truthy return.
  *
- * `bun x tsc --noEmit` exits `0` under all four, the bare-define leg
- * included, and that last one is the reading worth keeping: `string |
+ * `bun x tsc --noEmit` exits `0` under all nine, the bare-define leg
+ * included, and that one is the reading worth keeping: `string |
  * undefined` is assignable to an optional `commit?: string`, so
  * nothing about a removed `typeof` guard is a type error and only the
  * suite says the guard has gone.
  *
- * The `probe === undefined` check is the opposite case, and it is
- * recorded rather than defended. Deleting it leaves all 12 cases
- * GREEN: `await probe()` on an absent probe throws inside the same
- * `try` the rejection path uses and is swallowed into the same `null`.
- * `tsc` is what reports it, exit `2`, `error TS2722: Cannot invoke an
- * object which is possibly 'undefined'.` The check stays because a
- * fixture build should answer `null` by decision rather than by
- * falling through an exception handler.
+ * ## ... and the two opposite cases, recorded rather than defended
+ *
+ * The `probe === undefined` check is the first. Deleting it leaves
+ * all 20 cases GREEN: `await probe()` on an absent probe throws
+ * inside the same `try` the rejection path uses and is swallowed into
+ * the same `null`. `tsc` is what reports it, exit `2`, `error TS2722:
+ * Cannot invoke an object which is possibly 'undefined'.` The check
+ * stays because a fixture build should answer `null` by decision
+ * rather than by falling through an exception handler.
+ *
+ * {@link startDevTools}'s `features` member is the second, and there
+ * NOTHING reports it. Passing `features: []` while
+ * {@link devToolsFeatures} still answers the list leaves all 20 cases
+ * green, `tsc` at `0` and `lint` at `0` — all three measured. The
+ * unit runner is node-only and `mountDevTools` appends to
+ * `document.body`, so no case in this project can call that function
+ * at all, and no spec drives the app's own widget today: the
+ * dev-tools e2e spec runs against a harness page that configures its
+ * own features. What will read this member is the forced Playwright
+ * spec this plan's E2E stage adds, which opens the widget over the
+ * app and clicks the `Report feedback` row.
  */
 
 import type { ProbeAuthCall } from '../data/auth';
 import type { DataSource } from '../data/source';
-import type { Corner, DevToolsConfig, DevToolsDisposer } from '@ar/dev-tools';
+import type {
+  Corner,
+  DevToolsConfig,
+  DevToolsDisposer,
+  DevToolsFeature,
+} from '@ar/dev-tools';
+import type { ReportFormRenderer } from '@ar/dev-tools/feedback';
 
 import { mountDevTools } from '@ar/dev-tools';
+import { feedbackFeature } from '@ar/dev-tools/feedback';
+import { createElement } from 'react';
 
 import { probeAuth } from '../data/auth';
 import { resolveDataSource } from '../data/source';
 import { activeSurfaceId } from '../routes/paths';
+
+import { ReportForm } from './ReportForm';
+
+import '@ar/dev-tools/styles.css';
 
 /**
  * What `devtoolsPlugin()` substitutes while the dev server is serving.
@@ -229,13 +356,52 @@ export function devToolsBuildVersion(): NonNullable<DevToolsConfig['version']> {
 }
 
 /**
+ * Draw a report template's fields as this app's own form.
+ *
+ * The package's `renderForm` slot, filled, and it decides nothing:
+ * `./reportFormAdapter.ts` owns the mapping and `./ReportForm.tsx`
+ * owns the drawing, so what is here is the component named and the
+ * slot's three arguments passed on unchanged. See this module's
+ * documentation for why that pair sits in the app at all.
+ *
+ * @param fields - The chosen template's fields in template order,
+ * with the screenshot descriptor already withheld by the feature.
+ * @param values - Every answer so far, keyed by field id.
+ * @param onChange - Called with the WHOLE next record on every edit.
+ * @returns The element the drawer places inside its own `<form>`.
+ */
+export const renderDevToolsReportForm: ReportFormRenderer = (
+  fields,
+  values,
+  onChange,
+) => createElement(ReportForm, { fields, values, onChange });
+
+/**
+ * What this app plugs into the widget.
+ *
+ * One feature — the package's own feedback feature, handed
+ * {@link renderDevToolsReportForm} and nothing else. `module` and
+ * `priority` are left unstated for the reason `endpoint` is below:
+ * the package already files under `web`, which is what this app IS.
+ *
+ * Fresh per call, because a feature holds per-host state of its own
+ * (the derived host it memoises for the drawer), and
+ * {@link startDevTools} calls this once per mount.
+ *
+ * @returns The list `DevToolsConfig.features` takes, in menu order.
+ */
+export function devToolsFeatures(): readonly DevToolsFeature[] {
+  return [feedbackFeature({ renderForm: renderDevToolsReportForm })];
+}
+
+/**
  * Mount the dev-tools widget over this app.
  *
- * No feature is configured: this plan ships none, and the package
- * mounts an empty list by default, so the trigger, Position and About
- * are what appears. `endpoint` is left unstated for the same reason —
- * the package's default and the plugin's route are the same path, and
- * naming it here would be a second place for them to disagree.
+ * {@link devToolsFeatures} is the whole plug-in list, so the trigger,
+ * Position, About and one `Report feedback` row are what appears.
+ * `endpoint` is left unstated — the package's default and the
+ * plugin's route are the same path, and naming it here would be a
+ * second place for them to disagree.
  *
  * @returns The package's disposer. Calling it takes the widget down;
  * calling it more than once is harmless.
@@ -243,7 +409,7 @@ export function devToolsBuildVersion(): NonNullable<DevToolsConfig['version']> {
 export function startDevTools(): DevToolsDisposer {
   return mountDevTools({
     corner: DEVTOOLS_CORNER,
-    features: [],
+    features: devToolsFeatures(),
     version: devToolsBuildVersion(),
     extra: () => devToolsExtra(window.location.pathname, DATA_SOURCE),
     apiVersion: () => probeDevToolsApiVersion(probeAuth),

@@ -13,8 +13,8 @@
  * - {@link assembleDevTools} takes the filesystem, the clock, the
  *   command runner and the environment as {@link DevToolsPluginDeps} and
  *   reaches for none of them itself. It resolves the three build values
- *   once, answers spec item 8.1's `define` map, and builds the
- *   middleware through `./endpoint.ts`.
+ *   and the repository slug once, answers spec item 8.1's `define` map,
+ *   and builds the middleware through `./endpoint.ts`.
  * - {@link devtoolsPlugin} resolves the real world — `node:fs/promises`,
  *   `Date`, `spawnSync`, `process.env` — calls
  *   {@link assembleDevTools} once, and hands the `define` map to Vite's
@@ -30,7 +30,7 @@
  *
  * Vite filters plugins by `apply` BEFORE it runs a hook, so under `vite
  * build` this plugin's `config()` never runs, the three defines do not
- * exist and neither endpoint is registered. That is why
+ * exist and no endpoint is registered. That is why
  * `packages/web/src/dev/devtools.ts` reads `__DEVTOOLS_COMMIT__`,
  * `__DEVTOOLS_BRANCH__` and `__DEVTOOLS_ROUND__` behind `typeof` guards
  * rather than as plain identifiers: an unguarded read would be a
@@ -63,34 +63,56 @@
  * {@link runGit} is handed an argv ARRAY, with `shell: false`, and
  * `./git.ts`'s runner type takes the ARGUMENTS only — never a program
  * name — so neither a plugin option nor a request body can reach the
- * process it spawns. The three argument vectors it is ever called with
- * are the three frozen constants in `./git.ts`.
+ * process it spawns. The four argument vectors it is ever called with
+ * are the four frozen constants in `./git.ts`: the work-tree probe,
+ * the commit, the branch and `remote get-url origin`.
  *
- * ## Mutation note
+ * ## Mutation note — what `./plugin.test.ts` catches over the routes
  *
- * There is none yet, honestly: `src/vite/plugin.test.ts` is the NEXT
- * task in this stage, and a mutation reading is a measurement against a
- * colocated suite that does not exist while this file is written. The
- * gates run for this task were `lint`, `check-types`, `test` and
- * `build` inside `packages/dev-tools`, and `test` collected the four
- * sibling suites under `src/vite/` and no case over this file or over
- * `./endpoint.ts`. The suite's task is what adds the legs: the five
- * refusals in spec item 8.5's order, the status payload, a stored report
- * with its attachments on disk, a configured gateway receiving the
- * stored path, and `apply === 'serve'`.
+ * `./plugin.test.ts` is the colocated suite for this file AND for
+ * `./endpoint.ts`, and a green suite is no evidence a case can fail.
+ * The legs below were measured for the templates route and the `repo`
+ * slug by breaking one of the two files, running `bun x vitest run
+ * src/vite/plugin.test.ts` from `packages/dev-tools`, and restoring it
+ * byte-identical (sha256 compared after the run). The baseline is
+ * `Tests 15 passed (15)`.
+ *
+ * - `./endpoint.ts`'s templates branch dropped, so the path falls
+ *   through to the report handler: `3 failed | 12 passed` — all three
+ *   `the templates route` cases.
+ * - {@link DevToolsPluginOptions.templates}' route entry flipped to
+ *   `POST` in `ROUTE_METHODS`: `4 failed | 11 passed` — the three
+ *   above plus `refuses a POST to the templates route`, which is the
+ *   pair that pins the method both ways.
+ * - `repo` dropped from the status body: `2 failed | 13 passed` — both
+ *   status cases.
+ * - The templates branch moved ABOVE the loopback check: `1 failed |
+ *   14 passed` — `refuses a non-loopback caller without allowLan`.
+ * - `templates: options.templates` dropped from the context built
+ *   here, so the option is ignored and the directory is listed: `1
+ *   failed | 14 passed` — `reads the paths the templates option names,
+ *   not the directory`.
+ * - `resolveDevToolsRepo(deps.run)` replaced with the literal
+ *   `'unknown'`: `1 failed | 14 passed` — `names the repository the
+ *   origin remote points at`, which is why that case exists beside the
+ *   one asserting `unknown`.
  */
 
-import type { DevToolsEndpointContext, DevToolsMiddleware } from './endpoint';
+import type {
+  DevToolsEndpointContext,
+  DevToolsEndpointFs,
+  DevToolsMiddleware,
+} from './endpoint';
 import type { ReportGateway } from './gateway';
 import type { DevToolsBuildInfo, DevToolsCommandRunner } from './git';
-import type { DevToolsClock, DevToolsStoreFs } from './store';
+import type { DevToolsClock } from './store';
 import type { Plugin } from 'vite';
 
 import { spawnSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 
 import { createDevToolsEndpoint } from './endpoint';
-import { resolveDevToolsBuildInfo } from './git';
+import { resolveDevToolsBuildInfo, resolveDevToolsRepo } from './git';
 import { DEVTOOLS_DEFAULT_OUT_DIR, sanitiseSegment } from './store';
 
 /** The plugin's name in Vite's plugin list, `devtools`-prefixed. */
@@ -132,7 +154,7 @@ const GIT_TIMEOUT_MS = 5_000;
 /** The most stdout a `git` read may produce. */
 const GIT_MAX_BUFFER = 1024 * 1024;
 
-/** What {@link devtoolsPlugin} takes — spec item 8's four options. */
+/** What {@link devtoolsPlugin} takes — spec item 8's options. */
 export interface DevToolsPluginOptions {
   /**
    * The round tag, which names the directory reports land in.
@@ -161,6 +183,22 @@ export interface DevToolsPluginOptions {
   readonly outDir?: string;
 
   /**
+   * The issue forms to serve, instead of listing
+   * `.github/ISSUE_TEMPLATE/`.
+   *
+   * Each entry is a path to one `*.yml`, taken as given and in order:
+   * `./templates.ts` applies no extension filter, no `config.yml` skip
+   * and no sort to a caller that named its files. An explicitly EMPTY
+   * list serves no template at all, which turns the report form off
+   * without moving a file; leaving the option out lists the default
+   * directory.
+   *
+   * Like `outDir`, a relative path resolves against the cwd of the
+   * process running the dev server rather than against the repo root.
+   */
+  readonly templates?: readonly string[];
+
+  /**
    * Where a stored report goes next.
    *
    * This plan ships no implementation — `./gateway.ts` declares the
@@ -173,8 +211,15 @@ export interface DevToolsPluginOptions {
 
 /** The things {@link assembleDevTools} will not reach for. */
 export interface DevToolsPluginDeps {
-  /** The filesystem `./store.ts` writes through. */
-  readonly fs: DevToolsStoreFs;
+  /**
+   * The filesystem the endpoint reads and writes through.
+   *
+   * Both halves at once: `./store.ts`'s `mkdir` and `writeFile` for a
+   * report, `./templates.ts`'s `readdir` and `readFile` for the issue
+   * forms. {@link NODE_FS} is the real one, and it is four functions
+   * off `node:fs/promises`.
+   */
+  readonly fs: DevToolsEndpointFs;
 
   /** The clock `./store.ts` timestamps with. */
   readonly now: DevToolsClock;
@@ -206,7 +251,7 @@ export interface DevToolsAssembly {
   /** Spec item 8.1's three defines, each already JSON-encoded. */
   readonly define: Readonly<Record<string, string>>;
 
-  /** The middleware answering both endpoints. */
+  /** The middleware answering all four endpoints. */
   readonly handler: DevToolsMiddleware;
 }
 
@@ -254,11 +299,13 @@ function buildInfoOf(
 /**
  * Assemble the defines and the middleware over injected dependencies.
  *
- * Runs the `git` reads once, here. The middleware it answers holds no
- * mutable state, so one assembly serves every request of a dev-server
- * session.
+ * Runs the `git` reads once, here — the three build values and the
+ * `owner/name` slug the status route answers with. The middleware it
+ * answers holds no mutable state, so one assembly serves every request
+ * of a dev-server session; the issue forms are the exception, and
+ * `./endpoint.ts` says why that route reads the disk per request.
  *
- * @param options - The plugin's four options.
+ * @param options - The plugin's options.
  * @param deps - The filesystem, the clock, the command runner, the
  * environment, and optionally the scheme and a log sink.
  * @returns The resolved build info, the define map and the middleware.
@@ -272,6 +319,11 @@ export function assembleDevTools(
   const context: DevToolsEndpointContext = {
     info,
     outDir: options.outDir ?? DEVTOOLS_DEFAULT_OUT_DIR,
+    // The fourth and last `git` read of a dev-server start, and the
+    // one value `./git.ts` answers that no `define` carries: the slug
+    // is read by `GET /__devtools/status` alone.
+    repo: resolveDevToolsRepo(deps.run),
+    templates: options.templates,
     allowLan: options.allowLan ?? allowLanFromEnv(deps.env),
     protocol: deps.protocol ?? 'http:',
     gateway: options.gateway,
@@ -291,8 +343,15 @@ export function assembleDevTools(
   });
 }
 
-/** The real filesystem, which `./store.ts`'s seam is shaped after. */
-const NODE_FS: DevToolsStoreFs = { mkdir, writeFile };
+/**
+ * The real filesystem, which both injected seams are shaped after.
+ *
+ * `./store.ts`'s `DevToolsStoreFs` and `./templates.ts`'s
+ * `DevToolsTemplatesFs` are each satisfied by node's own signatures —
+ * both colocated suites assert that assignability at the type level —
+ * so one object serves the write side and the read side.
+ */
+const NODE_FS: DevToolsEndpointFs = { mkdir, readdir, readFile, writeFile };
 
 /** The real clock. */
 const NODE_CLOCK: DevToolsClock = () => new Date();
@@ -300,7 +359,8 @@ const NODE_CLOCK: DevToolsClock = () => new Date();
 /**
  * The real `git`, run with an argv array and no shell.
  *
- * The one place in this package that spawns a process. Synchronous
+ * One of the two places in this package that spawn a process, the
+ * other being `./gateway/run.ts` and its `rafa` calls. Synchronous
  * because `./git.ts`'s header says why: three values, read once, every
  * caller needing all three before it can define anything.
  *
@@ -339,8 +399,8 @@ const runGit: DevToolsCommandRunner = (args) => {
  * Registers for `serve` alone, so `vite build` runs none of it and a
  * built app carries neither the endpoints nor the three defines.
  *
- * @param options - The round, `allowLan`, the output directory and the
- * gateway, all optional.
+ * @param options - The round, `allowLan`, the output directory, the
+ * issue-form paths and the gateway, all optional.
  * @returns The Vite plugin.
  */
 export function devtoolsPlugin(options: DevToolsPluginOptions = {}): Plugin {

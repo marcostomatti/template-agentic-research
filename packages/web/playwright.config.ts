@@ -60,7 +60,24 @@ const DEVTOOLS_BASE_URL = `http://${HOST}:${DEVTOOLS_PORT}`;
 // Both servers start on every run of this config, a single-file run
 // included — Playwright starts every `webServer` entry before it looks
 // at which tests were selected.
-const DEVTOOLS_SPEC = 'dev-tools-shell.spec.ts';
+//
+// ONE array, read twice: as the forced project's `testMatch` and as the
+// default project's `testIgnore`. The two lists have to be exact
+// complements, and a shared constant is the only form that cannot let
+// them drift — because the failure of a spec missing from them is
+// SILENT rather than loud. Playwright's `testIgnore` subtracts from a
+// project and its `testMatch` selects into one, so neither rejects an
+// unnamed file: a dev-tools spec left out of this array is not skipped,
+// it is picked up by the DEFAULT project and driven against the plain
+// 5174 server, which is started with no `VITE_DEVTOOLS_FORCE` and so
+// serves an app where the widget is absent BY DESIGN. Every locator in
+// it then times out, and the run reads as a broken widget rather than
+// as a misrouted spec. Add a dev-tools spec here in the same commit
+// that adds the file.
+const DEVTOOLS_SPECS = [
+  'dev-tools-shell.spec.ts',
+  'dev-tools-feedback.spec.ts',
+];
 
 const IS_CI = Boolean(process.env['CI']);
 
@@ -80,11 +97,12 @@ const IS_CI = Boolean(process.env['CI']);
  * wall clock.
  *
  * Two servers and two projects, one engine. The default `chromium`
- * project drives the plain server on 5174 and runs every spec but one;
- * `chromium-devtools` drives a second server on 5177 started with
- * `VITE_DEVTOOLS_FORCE=1`, and runs only `dev-tools-shell.spec.ts`.
- * The comment block above `DEVTOOLS_SPEC` is why that variable cannot
- * come from the spec that needs it.
+ * project drives the plain server on 5174 and runs every spec but the
+ * two named in `DEVTOOLS_SPECS`; `chromium-devtools` drives a second
+ * server on 5177 started with `VITE_DEVTOOLS_FORCE=1`, and runs those
+ * two alone. The comment block above `DEVTOOLS_SPECS` is why that
+ * variable cannot come from the specs that need it, and why a spec
+ * left out of the array runs against the wrong server.
  */
 export default defineConfig({
   testDir: './tests/e2e',
@@ -131,20 +149,21 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
 
-      // The forced spec is the one file this project must not run: it
-      // drives a widget that exists only on the other server, and here
-      // every locator in it would time out. Stated as the same
+      // The forced specs are the files this project must not run: they
+      // drive a widget that exists only on the other server, and here
+      // every locator in them would time out. Stated as the same
       // constant the other project matches on, so the pair cannot
-      // drift into running the file twice or into skipping it.
-      testIgnore: DEVTOOLS_SPEC,
+      // drift into running a file twice or into skipping it.
+      testIgnore: DEVTOOLS_SPECS,
     },
     {
-      // The dev-tools shell, and nothing else. `baseURL` is the 5177
-      // server below, whose `VITE_DEVTOOLS_FORCE=1` is the only reason
-      // the widget is on the page at all.
+      // The dev-tools shell and the feedback drawer, and nothing else.
+      // `baseURL` is the 5177 server below, whose
+      // `VITE_DEVTOOLS_FORCE=1` is the only reason the widget is on the
+      // page at all.
       name: 'chromium-devtools',
       use: { ...devices['Desktop Chrome'], baseURL: DEVTOOLS_BASE_URL },
-      testMatch: DEVTOOLS_SPEC,
+      testMatch: DEVTOOLS_SPECS,
     },
   ],
 
@@ -171,8 +190,8 @@ export default defineConfig({
     {
       // The same app and the same command, served a second time with
       // the automation override on. See the comment block above
-      // `DEVTOOLS_SPEC` for why the variable has to live here rather
-      // than in the spec that needs it.
+      // `DEVTOOLS_SPECS` for why the variable has to live here rather
+      // than in the specs that need it.
       command:
         `bun x vite --host ${HOST} --port ${DEVTOOLS_PORT} --strictPort`,
       url: DEVTOOLS_BASE_URL,

@@ -12,13 +12,15 @@ import { expect, test } from '@playwright/test';
 // control for that guard) asserts.
 //
 // The page under every case here is `./fixtures/dev-tools-harness.html`,
-// NOT `/` — the real app (`src/dev/devtools.ts`) mounts the widget with
-// `features: []`, by that file's own words, so it never draws a modal
-// or a drawer for this spec to drive. The fixture's own header explains
-// why it exists, what it configures and why nothing here needs a
-// `version` to read a real commit; it is requested only by this file's
-// `page.goto` calls and by nothing the app or its production build
-// reaches.
+// NOT `/`. The real app (`src/dev/devtools.ts`) mounts ONE feature, the
+// package's feedback one, which contributes a single `end`-placed drawer
+// carrying a handle — so it draws no modal, no `start`-placed drawer and
+// no handle-less one, and three of this spec's four surfaces have
+// nothing on the app's own menu to drive. The fixture configures all of
+// them itself. Its own header explains why it exists, what it
+// configures and why nothing here needs a `version` to read a real
+// commit; it is requested only by this file's `page.goto` calls and by
+// nothing the app or its production build reaches.
 //
 // `devtools.settings` below is `@ar/dev-tools/src/core/settings.ts`'s
 // `DEVTOOLS_SETTINGS_KEY`, spelled out rather than imported: the

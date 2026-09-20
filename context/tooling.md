@@ -390,7 +390,10 @@
   prose cap here rather than being exempt like a table row. A fence INDENTED
   inside a list item hands that indentation to whatever reads it, so a
   multi-line `python3 -c` snippet under a bullet dies on IndentationError and
-  belongs at column 0.
+  belongs at column 0. A fence also needs a LANGUAGE: `eslint.base.mjs`
+  extends `markdown/recommended`, whose `fenced-code-language` rule errors on
+  a bare ``` — `text` is the fallback for a block that is no
+  language, and it is `lint` rather than any doc gate that reports it.
 - The `_` prefix does NOT rescue the omit-a-key destructure: measured at the
   repo root, both `const { a, ...rest } = obj` and
   `const { a: _a, ...rest } = obj` error as assigned-but-never-used, so

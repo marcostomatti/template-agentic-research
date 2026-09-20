@@ -183,6 +183,59 @@ The design docs are indexed in
 [packages/service/ARCHITECTURE.md](packages/service/ARCHITECTURE.md), and the
 workspace map is in [AGENTS.md](AGENTS.md).
 
+## Reporting while testing
+
+The web app (`@ar/web`) carries a development tools widget that lets you file bug
+reports and UI feedback without leaving the app.
+
+### Opening the tomato
+
+In the bottom-right corner (or another corner you configured), click the orange
+tomato trigger. The widget menu opens with a list of available features.
+
+### Picking the form
+
+Click **Report** in the menu to open the feedback drawer. A dropdown lists all
+available issue templates (e.g., `bug-report`, `ui-feedback`). Select the one that
+fits: pick the bug form to report a defect, the feedback form to suggest UI or
+behavior improvements.
+
+### Filing
+
+Fill in the form fields. The drawer appends three automatic fields:
+
+- **Element selector**: Click the crosshair icon to pick an element on the page.
+  The widget uses `data-testid`, `id`, `role`, and `aria-label` to name it; while
+  picking, the element outline and match count guide your selection.
+- **Screenshot**: Click to capture your screen (or drag/paste a PNG or JPEG if the
+  capture API is unavailable). The image helps triagers reproduce the issue.
+- **Context**: Viewport, device pixel ratio, color scheme, user agent, app version
+  and any error/artifact on the event bus — collected automatically, read-only.
+
+Enter a title and body text describing the issue. Click **File** to submit.
+
+### Where the PNG lands
+
+Screenshots are stored on your machine at `.rafa/feedback/<round>/` relative to the
+dev server's working directory. When you run `bun run dev` from `packages/web`, the
+path resolves to `packages/web/.rafa/feedback/<round>/…`. The files are gitignored,
+so nothing tracked is at risk. The issue tracker receives only the **path** to the
+PNG, never the image bytes themselves — the tracker refers to it, but the file stays
+on your machine.
+
+### No GitHub login
+
+If your repository has no GitHub authentication configured (no `gh` CLI login or
+token), `rafa` falls back to the local tracker. The drawer detects this and shows a
+prefilled link to create a new issue on GitHub by hand:
+
+```text
+https://github.com/<owner>/<repo>/issues/new?template=<file>&title=[fb/<round>] <title>&body=<body>
+```
+
+Copy the body text into that form and file it manually. The `[fb/<round>]` prefix
+and attachment paths are included for triagers to track the report's origin.
+
 ## Troubleshooting / Known issues
 
 | Symptom                                                                         | Cure                                                                                                                                                               |

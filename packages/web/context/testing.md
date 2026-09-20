@@ -7,8 +7,8 @@ ports number four rather than three:
 | Runner | What it reaches | Where the tests live |
 | --- | --- | --- |
 | `vitest` | Pure modules only — node environment, no DOM, include `src/**/*.test.ts` (`.ts`, never `.tsx`) | Colocated beside the module |
-| `playwright` via `playwright.config.ts`, project `chromium` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts`, less the dev-tools spec |
-| `playwright` via `playwright.config.ts`, project `chromium-devtools` | The same app on a SECOND dev server on port 5177 carrying `VITE_DEVTOOLS_FORCE=1`, so the dev-tools widget mounts under automation | `tests/e2e/dev-tools-shell.spec.ts` alone |
+| `playwright` via `playwright.config.ts`, project `chromium` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts`, less the dev-tools specs |
+| `playwright` via `playwright.config.ts`, project `chromium-devtools` | The same app on a SECOND dev server on port 5177 carrying `VITE_DEVTOOLS_FORCE=1`, so the dev-tools widget mounts under automation | The dev-tools specs named in `DEVTOOLS_SPECS`, and nothing else |
 | `playwright` via `playwright.visual.config.ts` | The same app screenshotted at four widths in both themes, on port 5175 | `tests/visual/*.spec.ts` |
 | `playwright` via `playwright.integration.config.ts` | The same app with `VITE_AR_API_URL` SET, in a real browser against a LIVE `@ar/service` over a seeded Postgres, on port 5176 | `tests/integration/*.spec.ts` |
 
@@ -113,23 +113,72 @@ mount time skips the whole render — no button, no root, nothing. The
 screenshot suite and the default e2e suite are both untouched, and that
 absence is itself a control: the default suite asserts the trigger is
 absent, proving the automation guard held. A forced SECOND dev server on
-port 5177 drives a single spec: it is a second entry in
+port 5177 drives the dev-tools specs: it is a second entry in
 `playwright.config.ts`'s `webServer` ARRAY, paired with a second project
-`chromium-devtools` whose `testMatch` is
-`tests/e2e/dev-tools-shell.spec.ts` and which the default `chromium`
-project takes a matching `testIgnore` for. There is NO
-`playwright.devtools.config.ts` — this page named one until the config
-was written, and the array form is what shipped. The guard is overridden
-by `VITE_DEVTOOLS_FORCE=1` on that server's own `env`, never by
-`test.use`, and `test.use` could not do it: Vite reads the variable when
-the dev server STARTS and bakes it into the served modules, while a
-`test.use` block configures a browser context created long afterwards.
-That spec runs the widget in all four corner positions, opens its menu,
-moves the trigger between corners, and verifies that a reload resets the
-corner to the configured default while keeping the size. It tests the
-modal's focus trap, the drawer's placement switcher and handle, the about
-popover's version line, and proves no more than one drawer opens at a
-time — all impossible from a suite that sees no widget at all.
+`chromium-devtools` whose `testMatch` is the `DEVTOOLS_SPECS` array
+(`dev-tools-shell.spec.ts` and the feedback drawer's spec) and which the
+default `chromium` project takes as its `testIgnore`. ONE array read
+twice, because a dev-tools spec named in neither list is not skipped: it
+is collected by the DEFAULT project and driven against the plain 5174
+server, where the widget is absent by design and every locator times
+out. There is NO `playwright.devtools.config.ts` — this page named one
+until the config was written, and the array form is what shipped. The
+guard is overridden by `VITE_DEVTOOLS_FORCE=1` on that server's own
+`env`, never by `test.use`, and `test.use` could not do it: Vite reads
+the variable when the dev server STARTS and bakes it into the served
+modules, while a `test.use` block configures a browser context created
+long afterwards.
+The shell spec runs the widget in all four corner positions, opens its
+menu, moves the trigger between corners, and verifies that a reload
+resets the corner to the configured default while keeping the size. It
+tests the modal's focus trap, the drawer's placement switcher and
+handle, the about popover's version line, and proves no more than one
+drawer opens at a time — all impossible from a suite that sees no
+widget at all.
+
+The second forced spec in `tests/e2e/dev-tools-feedback.spec.ts` drives
+the feedback drawer feature that the shell spec's real app wires into its
+one mounted feature. The drawer is a `DevToolsFeature` placed at the `end`
+edge with a `handle: true`, so it appears in the shell's menu as a choosable
+drawer and in the real app as the one drawer the feedback form fills. The
+spec runs under the same `chromium-devtools` project as the shell spec on
+port 5177 with `VITE_DEVTOOLS_FORCE=1`, for the same reason: the widget is
+absent by design under the default `chromium` project, and a spec driven
+against a page that carries no mount point is both unrun and silent.
+
+The spec opens the drawer from the menu, verifies the template select lists
+both issue forms (`bug-report` and `ui-feedback`), chooses the UI feedback
+form and asserts its fields render. It refuses an empty title, drives the
+element picker to write a selector from a clicked sidebar item and verifies
+the field shows one match, stubs the `/__devtools/report` endpoint to read
+the request body and assert the context keys, stubs a `duplicate` answer to
+show both buttons and proves **also affected** posts the comment. Two
+deliberately absent assertions carry equal weight: screenshot capture is not
+driven (`navigator.mediaDevices.getDisplayMedia` cannot show a prompt under
+automation that a person can accept, so a stubbed canvas is not the proof
+the feature works), while the drop zone IS driven with a fixture PNG to
+assert the file path writes and the preview thumbnail renders. Decision 3
+of the spec spells this split: capture API first, drop zone always.
+
+Opening a Radix dropdown (the template select) in a spec follows the `@ar/ui
+Select` pattern from the locator vocabulary: the trigger is a `button` with
+an accessible name from its `ariaLabel`, its panel is a `role="menu"` of
+`menuitemradio` items, and it is addressed at PAGE scope (the portal sits
+outside any dialog). Click the trigger button to open, then click the
+desired `menuitemradio` to choose. The selector for the template select is
+`page.getByRole('button', { name: 'Report type' }).click()`, followed by
+`page.getByRole('menuitemradio', { name: 'UI Feedback' }).click()`.
+
+The absence control for the feedback drawer appears in the default e2e suite
+(`chromium` project on port 5174 with `VITE_DEVTOOLS_FORCE` unset): the
+drawer guard at mount time reads `navigator.webdriver` and returns null,
+leaving the whole feature unmounted. A spec running against that page
+cannot reach the drawer's trigger at all, and that is exactly what
+`tests/e2e/unknown-route.spec.ts`'s absence case asserts — the same control
+that proved the shell widget itself was absent. The default suite also
+proves the feedback feature never lands in the production build: a `bun run
+build` in `packages/web` emits no dev-tools code at all, because `src/dev/`
+is guarded by `import.meta.env.DEV` end to end.
 
 Two readings that shipped with it, both measured rather than reasoned:
 
@@ -364,6 +413,28 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   instead, since a page needs a router and a query client. Delete
   either in the same step: `tests/e2e/` IS the `testDir`, so a
   leftover probe silently JOINS the suite and its count.
+- A THIRD idiom, for the hand-proof a definition-of-done asks for: a
+  Playwright config plus spec kept OUTSIDE the repo entirely, so no
+  probe can join the suite at all. Four things it needs, each measured
+  as a failure first. The temp directory resolves nothing, so
+  `mkdir -p <tmp>/node_modules/@playwright && ln -s
+  <repo>/packages/web/node_modules/@playwright/test <tmp>/node_modules/`
+  — one symlink serves the config and every spec beside it, or the
+  config dies at `Cannot find module '@playwright/test'`. Invoke it as
+  `bun x playwright test --config=<abs-tmp>/playwright.config.ts` FROM
+  `packages/web`: run from inside the temp directory, `bun x` resolves
+  `playwright` as a package to fetch and loads a SECOND copy of the
+  runner, which surfaces as `Playwright Test did not expect test() to
+  be called here.` Set `webServer.cwd` to `packages/web`'s absolute
+  path: Playwright defaults that cwd to the CONFIG FILE's directory,
+  and a vite server started there binds the port and answers every
+  request with 404, reading as `Timed out waiting 60000ms from
+  config.webServer`. And drop a `{ "type": "module" }` `package.json`
+  beside the config if any spec uses `import.meta`, since an
+  extensionless-module-system directory is CommonJS to Node and
+  `import.meta` throws a `SyntaxError` there. The dev server that proof
+  drives wants `VITE_DEVTOOLS_FORCE=1`, for the same reason the forced
+  project does.
 
 - The dynamic form's locator vocabulary, which no gate states and which
   four specs now depend on. `NodeForm` wraps the ONE mounted form in

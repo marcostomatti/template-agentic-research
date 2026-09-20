@@ -14,7 +14,7 @@
       "import": "./dist/index.js"
     },
     "./feedback": {
-      "types": "./dist/feedback/index.d.ts",
+      "types": "./dist/features/feedback/index.d.ts",
       "import": "./dist/feedback.js"
     },
     "./vite": {
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "build": "vite build",
-    "postbuild": "test -f ./dist/index.js || { echo 'ERROR: dist/index.js is absent, so the leak grep read nothing' >&2; exit 1; }; grep -qE \"(from|import|require)[[:space:]]*\\(?[[:space:]]*['\\\"](node:|child_process)\" ./dist/index.js && { echo 'ERROR: a node builtin (node: or child_process) is imported by the browser entry bundle dist/index.js' >&2; exit 1; }; exit 0",
+    "postbuild": "for devtoolsBundle in ./dist/index.js ./dist/feedback.js; do test -f \"$devtoolsBundle\" || { echo \"ERROR: $devtoolsBundle is absent, so the leak grep read nothing\" >&2; exit 1; }; done; for devtoolsBundle in ./dist/*.js; do case \"$devtoolsBundle\" in ./dist/vite.js) continue ;; esac; grep -qE \"(from|import|require)[[:space:]]*\\(?[[:space:]]*['\\\"](node:|child_process|yaml['\\\"/])\" \"$devtoolsBundle\" && { echo \"ERROR: a node-only import (node:, child_process or yaml) is imported by the browser entry bundle $devtoolsBundle\" >&2; exit 1; }; done; exit 0",
     "lint": "eslint src *.ts *.mjs",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
@@ -42,6 +42,8 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
+    "@medv/finder": "^4.0.2",
+    "yaml": "^2.9.1",
     "zod": "^4.6.5"
   },
   "peerDependencies": {

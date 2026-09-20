@@ -67,6 +67,7 @@ fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
 | `round` | `string` | — | Round tag for reports. Wins over env and branch. |
 | `allowLan` | `boolean` | `DEVTOOLS_ALLOW_LAN` env | Accept non-loopback addresses. |
 | `outDir` | `string` | `.rafa/feedback` | Where round directory is created. |
+| `templates` | `readonly string[]` | `.github/ISSUE_TEMPLATE/` | Issue forms to serve; `[]` serves none. |
 | `gateway` | `ReportGateway` | — | Where stored reports go next. |
 
 `outDir`'s default is `.rafa/feedback`, not `.devtools` — this table
@@ -81,6 +82,174 @@ gitignored either way — the repo-root `.gitignore`'s `.rafa/` pattern
 is unanchored and matches the nested directory as well — so nothing
 tracked is at risk; it is only where to look for a report by hand.
 
+## Feedback Feature
+
+The feedback drawer is a plugged-in feature that lets users file bug
+reports or UI feedback from inside the running app. It presents a form
+built from the repository's GitHub issue templates (read from
+`.github/ISSUE_TEMPLATE/*.yml` or the paths `templates` names), adds
+three fields of its own, captures a screenshot and element selector on
+request, and files the report through `rafa` to the tracker.
+
+### Issue Form Templates and `x-devtools` Contract
+
+GitHub issue forms drive the feedback form. Each issue form becomes a
+`ReportTemplate`: a title, description, module, and a list of fields.
+The plugin reads `.yml` files on every `GET /__devtools/templates`
+request, so edits are picked up without restarting; a missing or
+malformed file is skipped with a warning and nothing fatal.
+
+A template opts out of the widget's own fields through a top-level
+`x-devtools` key GitHub ignores:
+
+```yaml
+x-devtools:
+  screenshot: false  # hide the screenshot field
+  selector: false    # hide the element-selector field
+  context: always    # cannot be opted out of; ignored if present
+```
+
+The three appended fields are:
+- `screenshot` (`file`): capture via `navigator.mediaDevices.
+  getDisplayMedia({preferCurrentTab: true})`, or drag/paste a PNG or
+  JPEG. Cancelled dialogs or missing APIs answer `null` and the report
+  goes without. Stored under `.rafa/feedback/<round>/` on the server.
+- `selector` (`selector`): click to pick an element on the page; the
+  widget calls `@medv/finder` configured to prefer `data-testid`,
+  `id`, `role` and `aria-label` over Tailwind classes. While focused,
+  live matches are outlined and the match count shown; ArrowUp climbs to
+  parent, ArrowDown returns.
+- `context` (`readonly`): automatically collected: viewport, device
+  pixel ratio, colour scheme, `data-theme` if present, user agent,
+  `location.href`, app version, and the bus's last `error` and
+  `artefact` when present. Never opted out.
+
+### Form Renderer Slot
+
+The package ships a plain HTML renderer for the form, but `mountDevTools`
+accepts `renderForm?(fields, value, onChange)` to customize it. The
+renderer receives `ReportField[]` (the seven kinds: `text`, `textarea`,
+`select`, `checkboxes`, `readonly`, `file`, `selector`) and owns all
+drawing; both the default and a custom renderer mark the selector input
+`data-devtools-field="selector"` so the element-picker decoration can
+attach correctly.
+
+### Endpoints: Templates, Report, and Comment
+
+Three routes handle the feature:
+
+**`GET /__devtools/templates`**: Returns an array of `ReportTemplate`
+objects, parsed from `.yml` files and validated against a zod schema
+that both halves of this package share. A missing directory answers
+`[]`; an unreadable or malformed file is skipped with a dev-server
+log warning.
+
+**`POST /__devtools/report`**: Stores a filed report to disk and
+dispatches it to a gateway if configured. The request carries a
+title, body (both validated for length), a context object, and
+attachments (base64-encoded PNG/JPEG). The response answers `{status,
+path, gateway}` where `gateway` is whatever the configured gateway
+returned (or `none` if unconfigured). The PNG is stored under
+`.rafa/feedback/<round>/` and the path links it in the issue body.
+The PNG never travels to the tracker — only its path does.
+
+**`POST /__devtools/comment`**: The "also affected" route. When a
+search finds a duplicate, this posts a comment linking the new report.
+The request carries an `issueId` (passed to the gateway's `comment`
+method and never altered) and a body. The response answers `{status:
+'commented', gateway: {...}}`. A dev server with no gateway answers
+`gateway-absent`, since there is nowhere for a comment to go.
+
+### Refusals
+
+| Rule | Code | When |
+| --- | --- | --- |
+| `remote-not-loopback` | 403 | Non-loopback address without `allowLan` |
+| `origin-mismatch` | 403 | Cross-origin `POST` on request `Origin` header |
+| `host-mismatch` | 403 | Cross-origin `POST` on request `Host` header |
+| `method-not-allowed` | 405 | Wrong method: `GET` to `/report` or `/comment` |
+| `body-too-large` | 413 | Over 24 MiB |
+| `body-unreadable` | 400 | Stream read error |
+| `body-not-json` | 400 | JSON parse failed |
+| `slug-unusable` | 400 | Title sanitises to empty |
+| `attachment-name-unusable` | 400 | Attachment name empty |
+| `gateway-absent` | 500 | `POST /comment` with no gateway configured |
+| `round-unusable` | 500 | Round is empty |
+| `clock-unusable` | 500 | Timestamp failed |
+| `write-failed` | 500 | Filesystem I/O error |
+| `socket-unreadable` | 403 | Cannot read local port |
+| `endpoint-failed` | 500 | Unhandled middleware exception |
+
+The endpoint checks `remote-not-loopback` on every request (both `GET`
+and `POST`), before checking origin; so a non-loopback caller is
+refused the same code whatever `Origin` it sends, and there is no way
+to observe an origin-based refusal from a LAN address.
+
+### `rafaGateway`: Filing Through `rafa`
+
+The one built-in gateway runs the `rafa` binary to file reports and
+dedupe against existing issues. It is imported dynamically and bound
+through the `gateway` plugin option:
+
+```typescript
+import { rafaGateway } from '@ar/dev-tools/vite'
+
+export default defineConfig({
+  plugins: [
+    devtoolsPlugin({
+      gateway: rafaGateway({
+        bin: 'rafa',  // optional; default is 'rafa'
+      }),
+    }),
+  ],
+})
+```
+
+The gateway decides the exact argv for every call to `rafa` (never a
+shell string; every flag is one argv element in `--flag=value` form):
+
+```text
+rafa issue list   --type=bug --search=<words> --output=json
+rafa issue create --title=[fb/<round>] <title> --body=<body>
+                  --type=bug --module=web --output=json
+rafa issue comment <id> --body=<markdown> --output=json
+```
+
+The `[fb/<round>]` title prefix and attachment paths are applied
+server-side (the browser has no authority over the round and the paths
+do not exist until the report is stored). The attachment BYTES never
+leave the machine; only their paths are appended to the issue body.
+
+An issue form's own `labels:` key does NOT reach an issue the widget
+files. That key is applied by GitHub's new-issue chooser UI alone;
+`rafa issue create` neither reads nor forwards it, and rafa has no
+label flag at all. So the labels on a widget-filed issue are the ones
+rafa derives from its own flags — measured on the github tracker as
+`type:bug`, `needs-triage` and `module:web` for a `--type=bug
+--module=web` create, whichever form was chosen. A form's `labels:`
+still governs the same issue opened by hand, so the two routes to one
+tracker do not agree on labels and a triage query must key on the
+`[fb/<round>]` title prefix rather than on a label.
+
+### Local Tracker Path
+
+When the tracker has no GitHub authentication, rafa falls back to the
+`local` tracker and stores issues in the repo. That fallback still
+SUCCEEDS: the gateway answers `filed` with `tracker: 'local'`, not the
+endpoint-level `stored`, and the drawer's status line reads
+`Filed as <id> on local.` The escape hatch is keyed on the tracker
+rather than on the status — any non-`github` `filed` is treated exactly
+like a gateway-absent `stored` — so the widget shows a prefilled GitHub
+new-issue link beside a copy block of the same body, so a triager can
+carry the content over by hand:
+
+```
+/issues/new?template=<file>&title=[fb/<round>] <title>&body=<body>
+```
+
+The repo slug is read from `git remote get-url origin` and served by
+`GET /__devtools/status`.
+
 ## Endpoints
 
 ### `GET /__devtools/status`
@@ -93,9 +262,28 @@ Returns build and configuration info.
   "branch": "main",
   "round": "default",
   "persistence": false,
-  "gateway": "none"
+  "gateway": "none",
+  "repo": "owner/name"
 }
 ```
+
+`repo` is the `owner/name` slug of the `origin` remote, read once at
+dev-server start through `git remote get-url origin`, and `unknown`
+where there is no remote or its url parses as no repository. Only the
+two capture groups are answered, so a remote url carrying credentials
+never reaches the response.
+
+### `GET /__devtools/templates`
+
+Returns the repository's GitHub issue forms, parsed into the
+`ReportTemplate` shape both halves of this package validate against —
+a bare JSON array, in the order they were read.
+
+The directory is read on every request, so an edited issue form is
+picked up without restarting the dev server. Nothing there is fatal: a
+missing `.github/ISSUE_TEMPLATE/` answers `[]`, and an unreadable or
+malformed file is skipped with a warning in the dev-server log naming
+it.
 
 ### `POST /__devtools/report`
 
@@ -116,6 +304,43 @@ Stores a report and attachments.
 }
 ```
 
+`path` is this package's own report-JSON path on disk, written before
+any gateway runs. It is NOT `gateway.id`, which is the tracker's own
+issue id; both are present in the same response and read alike in a
+log, so name which one a reading means.
+
+### `POST /__devtools/comment`
+
+The "also affected" route: adds a comment to an issue the tracker
+already has, which is how a report that matched an existing one ends.
+It writes nothing to disk — the report it is about was stored by the
+route above on an earlier request.
+
+**Request body**:
+- `issueId`: the tracker's own id, up to 128 characters. An identifier
+  charset only, and never one beginning with a dash: a gateway passes
+  it to `rafa` as an argv element, where a leading dash reads as a flag.
+- `body`: the comment markdown, up to 5,000 characters
+
+**Success (200)**:
+```json
+{
+  "status": "commented",
+  "gateway": { "status": "filed", "tracker": "local", "id": "AR-123" }
+}
+```
+
+`gateway` is whatever `ReportGateway.comment` answered, wrapped rather
+than returned bare. A gateway that refused is still a 200 carrying
+`{"status": "refused", "reason": "…"}` under that key, because the
+REQUEST was not refused; a top-level `"status": "refused"` always means
+the request itself was.
+
+A dev server configured with no gateway refuses this route with
+`gateway-absent` — see below — since there is nowhere for a comment to
+go. The body is validated first either way, so a malformed one is
+refused the same on every machine.
+
 ### Refusals
 
 | Rule | Code | Reason | When |
@@ -123,12 +348,13 @@ Stores a report and attachments.
 | `remote-not-loopback` | 403 | Non-loopback address without `allowLan` | Remote not allowed |
 | `origin-mismatch` | 403 | Request `Origin` header mismatch | Cross-origin `POST` |
 | `host-mismatch` | 403 | Request `Host` header mismatch | Cross-origin `POST` |
-| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report` or `POST` to `/status` |
+| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report` or `/comment`, or `POST` to `/status` or `/templates` |
 | `body-too-large` | 413 | Over 24 MiB | Oversized body |
 | `body-unreadable` | 400 | Stream error | Read failed |
 | `body-not-json` | 400 | `JSON.parse` failed | Invalid JSON |
 | `slug-unusable` | 400 | Title sanitises to empty | Body validation |
 | `attachment-name-unusable` | 400 | Attachment name empty | Body validation |
+| `gateway-absent` | 500 | No gateway configured | `POST` to `/comment` with no `gateway` option |
 | `round-unusable` | 500 | Round is empty | Server state |
 | `clock-unusable` | 500 | Timestamp failed | Server state |
 | `write-failed` | 500 | Filesystem error | Server I/O |

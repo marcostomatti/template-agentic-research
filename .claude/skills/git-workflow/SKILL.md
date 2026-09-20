@@ -133,6 +133,18 @@ So bring the branch up to date with the base BEFORE pushing
 (`git fetch origin main && git merge origin/main`), where the plan's context
 is still loaded, rather than discovering it at review time.
 
+Do not read that fetch's EXIT CODE as the verdict. `git fetch origin main`
+can exit non-zero on a routine remote-tracking-ref update while having
+fetched correctly — the summary goes to stderr and under a `set -e`-style
+shell the `&&` chain then never runs the merge, so a script reports "fetch
+failed" for a fetch that succeeded. Confirm it by READING the ref instead:
+`git rev-parse origin/main` after the fetch, and compare it against the
+remote (`git ls-remote origin main`). The same applies to
+`git merge-tree --write-tree origin/main HEAD`, which exits non-zero on
+conflicts and whose FIRST line is always the written tree's OID — a 40-hex
+line there is the tree, never a conflict; the `CONFLICT (...)` lines below
+it carry the reading.
+
 **Split conflicts by kind and only escalate one kind.** Version bumps,
 lockfiles, generated artifacts, and complementary additions (both sides
 appended different material to the same file — keep BOTH) are mechanical:

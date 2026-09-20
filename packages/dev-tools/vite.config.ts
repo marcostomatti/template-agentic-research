@@ -18,8 +18,11 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
  *   `dist/feedback.js` and `dist/vite.js`.
  * - The declaration path comes from the SOURCE path, because
  *   `vite-plugin-dts` mirrors `src/`, so the types land at
- *   `dist/index.d.ts`, `dist/feedback/index.d.ts` and
- *   `dist/vite/index.d.ts`.
+ *   `dist/index.d.ts`, `dist/features/feedback/index.d.ts` and
+ *   `dist/vite/index.d.ts`. The two are independent: the feedback
+ *   source sits under `src/features/`, so its declaration moved to
+ *   `dist/features/feedback/index.d.ts` while its bundle stayed at
+ *   `dist/feedback.js`, named by the unchanged entry key.
  *
  * No React plugin is registered: nothing here needs Fast Refresh, and
  * Vite's esbuild transform reads `jsx: "react-jsx"` from
@@ -62,18 +65,25 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(rootDir, 'src/index.ts'),
-        feedback: resolve(rootDir, 'src/feedback/index.ts'),
+        feedback: resolve(rootDir, 'src/features/feedback/index.ts'),
         vite: resolve(rootDir, 'src/vite/index.ts'),
       },
       formats: ['es'],
     },
     rollupOptions: {
-      // React and its DOM renderer are peers; zod and @floating-ui/dom
-      // are runtime dependencies the consumer installs. Bundling any of
-      // them would ship a second copy into the host app. Every `node:`
-      // builtin is external so the node entry (`src/vite/`) resolves
-      // them at runtime instead of Rollup trying to bundle them for a
-      // browser target.
+      // React and its DOM renderer are peers; zod, @floating-ui/dom,
+      // @medv/finder and yaml are runtime dependencies the consumer
+      // installs. Bundling any of them would ship a second copy into the
+      // host app. Every `node:` builtin is external so the node entry
+      // (`src/vite/`) resolves them at runtime instead of Rollup trying
+      // to bundle them for a browser target.
+      //
+      // `yaml` is read by the node half only (`src/vite/`), so it is
+      // external here AND refused by `package.json`'s `postbuild` leak
+      // grep in both browser bundles: external keeps Rollup from
+      // inlining it, the grep proves no browser entry imports it.
+      // `@medv/finder` is the opposite case — browser-only, external so
+      // the host app installs one copy.
       //
       // The subpath regexes are load-bearing, not tidiness: swapping
       // `/^react($|\/)/` for the bare string 'react' leaves
@@ -85,6 +95,8 @@ export default defineConfig({
         /^react-dom($|\/)/,
         /^zod($|\/)/,
         /^@floating-ui\/dom($|\/)/,
+        /^@medv\/finder($|\/)/,
+        /^yaml($|\/)/,
         /^node:/,
       ],
       output: {

@@ -8,10 +8,35 @@ const DEFAULT_API_PORT = 3000;
 const DEFAULT_BASE_PATH = '/';
 
 /**
+ * The issue forms the feedback drawer serves, as paths relative to THIS
+ * package — `devtoolsPlugin`'s own `templates` option reads a relative
+ * path against the cwd of the process running the dev server, which is
+ * `packages/web` and never the repo root.
+ *
+ * Left unstated, the plugin falls back to its own default —
+ * `.github/ISSUE_TEMPLATE` resolved against that same cwd — which
+ * exists nowhere under this package. Measured against a plain
+ * `bun x vite`: `GET /__devtools/templates` answered `[]`, so the
+ * report-type select drew disabled and the drawer no form at all. The
+ * two paths below are the repo's actual issue forms, named in the order
+ * `./templates.ts` would otherwise sort a directory listing into, so a
+ * `bun run dev` here draws the same two rows a full directory read would
+ * have served.
+ */
+const DEVTOOLS_ISSUE_TEMPLATE_PATHS: readonly string[] = [
+  '../../.github/ISSUE_TEMPLATE/bug-report.yml',
+  '../../.github/ISSUE_TEMPLATE/ui-feedback.yml',
+];
+
+/**
  * The dev-tools plugin under `serve`, and nothing under `build`.
  *
  * The specifier is only ever resolved on the `serve` path, so a checkout
  * (or an image stage) holding no built `@ar/dev-tools` can still build.
+ * Both names come out of that one import: the plugin, and the
+ * `rafaGateway` it files a stored report through — which is also
+ * CONSTRUCTED here, inside the `serve` branch, so a build prepares no
+ * gateway at all.
  */
 const loadDevtoolsPlugins = async (
   command: 'build' | 'serve',
@@ -19,8 +44,11 @@ const loadDevtoolsPlugins = async (
   if (command !== 'serve') {
     return [];
   }
-  const { devtoolsPlugin } = await import('@ar/dev-tools/vite');
-  return [devtoolsPlugin()];
+  const { devtoolsPlugin, rafaGateway } = await import('@ar/dev-tools/vite');
+  return [devtoolsPlugin({
+    gateway: rafaGateway(),
+    templates: DEVTOOLS_ISSUE_TEMPLATE_PATHS,
+  })];
 };
 
 export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
@@ -47,6 +75,18 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     // its three `__DEVTOOLS_*__` defines do not exist, and neither
     // `/__devtools` endpoint is registered — which is why
     // `src/dev/devtools.ts` reads all three defines behind `typeof` guards.
+    //
+    // The GATEWAY is held to the same rule, for the same reason and for
+    // one of its own. `rafaGateway` is an export of that one node entry,
+    // so naming it in a static import resolves `@ar/dev-tools/vite`
+    // exactly as importing the plugin would: resolution happens when
+    // this file is LOADED, and using the value only under `serve`
+    // changes nothing about when its module is fetched. Its own
+    // implementation is the second reason — it runs the `rafa` binary
+    // through `node:child_process`, so a static import would pull a
+    // process-spawning runner into the config graph of a build whose
+    // whole job is to file nothing and reach nothing. Both names are
+    // therefore taken from the dynamic import above.
     plugins: [react(), tailwindcss(), ...(await loadDevtoolsPlugins(command))],
     server: {
       proxy: {

@@ -112,6 +112,27 @@ const SUMMARY_FIELD = 'summary';
  */
 const DEV_TOOLS_TRIGGER_NAME = 'Dev tools';
 
+/**
+ * The feedback drawer's accessible name — `Shell.tsx` passes the
+ * `MenuItem.label` straight through to `DevToolsDrawer`'s `label` prop,
+ * so this is `dev-tools-feedback.spec.ts`'s own `FEEDBACK_ITEM_LABEL`.
+ *
+ * This default-suite boot is the control for that spec, the same way
+ * the trigger case above is the control for `dev-tools-shell.spec.ts`:
+ * the widget never mounts here, so neither the drawer nor its handle
+ * can either, and this is the one assertion of that.
+ */
+const FEEDBACK_DRAWER_NAME = 'Report feedback';
+
+/**
+ * The collapsed handle's accessible name once a feedback drawer has
+ * been opened and stored — `drawerRules.ts`'s `describeDrawerHandle`.
+ * Asserted alongside the drawer itself: the handle is a SEPARATE
+ * element `Drawer.tsx` draws in the drawer's place once collapsed, so
+ * an absent drawer says nothing on its own about an absent handle.
+ */
+const FEEDBACK_HANDLE_NAME = `Expand ${FEEDBACK_DRAWER_NAME}`;
+
 test.describe('the app at the single-domain base', () => {
   test('boots onto the digest surface', async ({ page }) => {
     // Arrange / Act — the bare base, with no surface named.
@@ -258,6 +279,25 @@ test.describe('the app at the single-domain base', () => {
     // visible.
     await expect(
       page.getByRole('button', { name: DEV_TOOLS_TRIGGER_NAME }),
+    ).toHaveCount(0);
+  });
+
+  test('never mounts the feedback drawer or its handle', async ({
+    page,
+  }) => {
+    // Arrange / Act — the default project's own server, same as the
+    // trigger case above.
+    await page.goto(SINGLE_DOMAIN_BASE);
+
+    // Assert — the counterpart to `dev-tools-feedback.spec.ts`, which is
+    // the one file where the drawer opens and its handle is asserted
+    // against a stored state. Neither locator has anything to match
+    // here: the trigger that would open the drawer is itself absent.
+    await expect(
+      page.getByRole('dialog', { name: FEEDBACK_DRAWER_NAME }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: FEEDBACK_HANDLE_NAME }),
     ).toHaveCount(0);
   });
 });

@@ -1,0 +1,66 @@
+# GitHub issue form. Two readers:
+#
+#   - GitHub's own "new issue" chooser, so UI feedback filed by hand takes
+#     the same shape as feedback the dev-tools widget files.
+#   - `@ar/dev-tools`' plugin half, which parses this file and renders its
+#     `body` items as the widget's form fields.
+#
+# The `x-devtools` key below is not part of GitHub's schema; GitHub ignores
+# unknown top-level keys, and the widget reads it to decide which of its own
+# three fields to append. UI feedback gets BOTH a screenshot and an element
+# selector — it is almost always about one node on screen, and the selector
+# is what turns "the spacing is wrong" into a node a reviewer can open — on
+# top of the always present context block.
+#
+# The surface options are the app's six top-level surfaces, in sidebar
+# order; they mirror `packages/web/src/app-shell/nav.ts`, which is the one
+# table `SURFACES` derives from. The breakpoint options are the four widths
+# the visual regression harness screenshots.
+name: UI feedback
+description: Something in the app looks wrong, misaligned, or off-design.
+title: '[fb/manual] '
+labels: ['type:ui', 'needs-triage']
+
+x-devtools:
+  screenshot: true
+  selector: true
+
+body:
+  - type: textarea
+    id: what-looks-wrong
+    attributes:
+      label: What looks wrong
+      description: >-
+        The element, and what is off about it. Say what you expected it to
+        look like when that is not obvious.
+      placeholder: The tree nav's selected row loses its accent at 768px.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: The top-level surface the problem is on.
+      options:
+        - Digest
+        - Lexicon
+        - Sources
+        - Agents
+        - Tools
+        - Settings
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breakpoint
+    attributes:
+      label: Breakpoint
+      description: The viewport width you saw it at.
+      options:
+        - '320'
+        - '768'
+        - '1024'
+        - '1440'
+    validations:
+      required: true
