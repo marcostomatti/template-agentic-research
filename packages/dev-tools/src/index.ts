@@ -3,7 +3,7 @@
  * The browser entry of `@ar/dev-tools` — the `.` export, and the whole
  * of what a consuming app and a feature author are allowed to reach.
  *
- * Three things leave this file and nothing else does:
+ * Four things leave this file and nothing else does:
  *
  * - {@link mountDevTools}, which an app calls once and holds the
  *   disposer of. It appends the widget's own `<div
@@ -18,6 +18,11 @@
  * - The feature contract, as types: what a {@link DevToolsFeature} is,
  *   what a {@link MenuItem} may be, and {@link DevToolsHost} — the ONE
  *   thing a feature may reach.
+ * - What a dev-only bridge in the host app needs to do its own half:
+ *   the mount decision as a value ({@link shouldMountDevTools} over
+ *   {@link isDevToolsAutomated} and {@link isDevToolsForced}) and
+ *   {@link installGlobalCapture}. The three sections below say why
+ *   each of the four names is reachable rather than internal.
  *
  * ## The list is written out, and the omissions are deliberate
  *
@@ -56,6 +61,38 @@
  * result object would have answered the same question and reopened
  * decision 7; exporting the predicate answers it and leaves every
  * existing call site untouched.
+ *
+ * ## ... and why the two environment readings leave with it
+ *
+ * A predicate is only half of a decision: {@link shouldMountDevTools}
+ * is pure, and the `automated` and `forced` members it reads are taken
+ * from the environment by {@link isDevToolsAutomated} and
+ * {@link isDevToolsForced}. An app that took those two readings itself
+ * would be writing a SECOND reading of the same environment, and the
+ * two can disagree — `VITE_DEVTOOLS_FORCE=0` is a non-empty string, so
+ * an app testing it for truthiness reads the override as on while
+ * `isDevToolsForceValue`'s negatives read it as off. A bridge
+ * installed over a widget that refused is the shape that disagreement
+ * takes, and nothing at runtime would report it.
+ *
+ * So the app calls the same two functions {@link mountDevTools} calls,
+ * and the answer is identical by construction rather than by review.
+ * `isDevToolsForceValue` itself stays internal: it is the parse those
+ * two readings share, and a consumer that reached for it would be
+ * taking the second reading this pair exists to prevent.
+ *
+ * ## The window capture leaves too, and only the app can install it
+ *
+ * {@link installGlobalCapture} is decision 4 of the same spec: the
+ * `error` and `unhandledrejection` listeners that turn a failure
+ * outside every React tree into an `error` payload on the bus. Nothing
+ * in this package calls it — {@link mountDevTools} deliberately does
+ * not, because the listeners outlive a widget that was never mounted
+ * and their lifetime belongs to whoever holds the disposer — so
+ * without this line it would be a module the package ships and no
+ * consumer can reach. The app's dev-only bridge is its one caller, and
+ * it hands the bus explicitly rather than leaning on the default, so
+ * what it captures lands where that bridge reads.
  *
  * ## Nothing here may import a node builtin
  *
@@ -113,4 +150,10 @@ export type {
 export type { DevToolsDisposer, DevToolsMountDecision } from './core/mount';
 
 export { devtoolsBus } from './core/bus';
-export { mountDevTools, shouldMountDevTools } from './core/mount';
+export { installGlobalCapture } from './core/globalCapture';
+export {
+  isDevToolsAutomated,
+  isDevToolsForced,
+  mountDevTools,
+  shouldMountDevTools,
+} from './core/mount';
