@@ -12,6 +12,10 @@ const DEFAULT_BASE_PATH = '/';
  *
  * The specifier is only ever resolved on the `serve` path, so a checkout
  * (or an image stage) holding no built `@ar/dev-tools` can still build.
+ * Both names come out of that one import: the plugin, and the
+ * `rafaGateway` it files a stored report through — which is also
+ * CONSTRUCTED here, inside the `serve` branch, so a build prepares no
+ * gateway at all.
  */
 const loadDevtoolsPlugins = async (
   command: 'build' | 'serve',
@@ -19,8 +23,8 @@ const loadDevtoolsPlugins = async (
   if (command !== 'serve') {
     return [];
   }
-  const { devtoolsPlugin } = await import('@ar/dev-tools/vite');
-  return [devtoolsPlugin()];
+  const { devtoolsPlugin, rafaGateway } = await import('@ar/dev-tools/vite');
+  return [devtoolsPlugin({ gateway: rafaGateway() })];
 };
 
 export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
@@ -47,6 +51,18 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     // its three `__DEVTOOLS_*__` defines do not exist, and neither
     // `/__devtools` endpoint is registered — which is why
     // `src/dev/devtools.ts` reads all three defines behind `typeof` guards.
+    //
+    // The GATEWAY is held to the same rule, for the same reason and for
+    // one of its own. `rafaGateway` is an export of that one node entry,
+    // so naming it in a static import resolves `@ar/dev-tools/vite`
+    // exactly as importing the plugin would: resolution happens when
+    // this file is LOADED, and using the value only under `serve`
+    // changes nothing about when its module is fetched. Its own
+    // implementation is the second reason — it runs the `rafa` binary
+    // through `node:child_process`, so a static import would pull a
+    // process-spawning runner into the config graph of a build whose
+    // whole job is to file nothing and reach nothing. Both names are
+    // therefore taken from the dynamic import above.
     plugins: [react(), tailwindcss(), ...(await loadDevtoolsPlugins(command))],
     server: {
       proxy: {
