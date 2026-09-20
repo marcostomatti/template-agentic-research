@@ -26,7 +26,16 @@ this package's gates are worth knowing before calling a change verified:
   names an export the file does not have. A private helper component
   is therefore not the way out — make the markup a module-level JSX
   element constant and inline its wrapper, so the file declares no
-  component at all.
+  component at all. Where a scoped disable IS the right answer (the
+  crash route's throwing component, which fast refresh has nothing
+  to preserve in), write it in the BLOCK form
+  `/* eslint-disable-next-line <rule> -- reason */` spanning lines,
+  as `packages/ui/src/atoms/Icon/Icon.tsx` does. Consecutive `//`
+  lines do NOT work: `eslint-disable-next-line` covers exactly the
+  line after the comment it sits on, so a second `//` line is a
+  separate comment, the directive lands on IT, the real error still
+  fires and an `Unused eslint-disable directive` warning appears
+  beside it.
 - `check-types` covers `src`, `tests` and the package-root config
   files. The `*.mjs` entry in the tsconfig `include` is inert without
   `allowJs`, and the package `test` script does not type-check at all
@@ -47,3 +56,11 @@ this package's gates are worth knowing before calling a change verified:
   plan, and quote the BUILD's own gzip line rather than re-deriving it —
   a bundler's printed gzip size is not reproducible by any gzip level, so
   re-deriving it reports an improvement nobody made.
+- A claim of the form "literal X is absent from the production bundle"
+  is only a reading once two things hold. Run `file
+  dist/assets/index-*.js` and confirm it says ASCII text FIRST: grep
+  treats a binary-flagged file differently, and a minifier could in
+  principle emit content that trips that flag, turning every `grep -o`
+  count into a zero that means nothing. Then plant a control in the
+  same run — `Agentic Research` reads 1 — so the row of zeros beside
+  it is a measurement rather than a grep that matched nothing.

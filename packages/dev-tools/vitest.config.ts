@@ -3,7 +3,11 @@ import { defineConfig } from 'vitest/config';
 // Two projects, because this package spans two runtimes and one runner
 // cannot serve both. `src/core/**` and `src/features/**` ship to the
 // browser and read `document`, `localStorage` and `navigator`, so they
-// are collected under jsdom. `src/vite/**` is the node layer — the dev
+// are collected under jsdom, as is `src/index.test.ts` — the browser
+// barrel's own cases, which sit beside `src/index.ts` rather than under
+// either directory and would be collected by nobody without the second
+// pattern (measured: with the `src/{core,features}` pattern alone the
+// file is not listed in the jsdom project's run). `src/vite/**` is the node layer — the dev
 // server plugin, its filesystem writes and its request refusals — and
 // is collected under node, where a jsdom `window` would be a lie about
 // the environment the plugin actually runs in.
@@ -56,7 +60,7 @@ export default defineConfig({
         test: {
           name: 'jsdom',
           environment: 'jsdom',
-          include: ['src/{core,features}/**/*.test.ts'],
+          include: ['src/*.test.ts', 'src/{core,features}/**/*.test.ts'],
         },
       },
       {

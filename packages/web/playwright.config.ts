@@ -77,6 +77,7 @@ const DEVTOOLS_BASE_URL = `http://${HOST}:${DEVTOOLS_PORT}`;
 const DEVTOOLS_SPECS = [
   'dev-tools-shell.spec.ts',
   'dev-tools-feedback.spec.ts',
+  'dev-tools-boundary.spec.ts',
 ];
 
 const IS_CI = Boolean(process.env['CI']);

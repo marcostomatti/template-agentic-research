@@ -62,3 +62,87 @@ compose now that theirs has landed.
   opens it, a claim rather than a ledger, and four landed modals cite
   it for the relative-close reading — so removing it is a decision of
   its own.
+
+## The error boundary, the fallback, and app signals
+
+`src/app-shell/AppErrorBoundary.tsx`,
+`src/app-shell/RouteErrorBoundary.tsx`, and
+`src/app-shell/CrashFallback.tsx` are reached from
+`src/main.tsx` in a PRODUCTION build. They survive there
+because a production run needs to catch a render error and
+show something instead of a blank document.
+
+### The two boundaries
+
+React unmounts the whole root when a render throws with no boundary
+above it, and a class component is the ONLY kind that can stop that.
+Two boundaries catch two separate classes of error:
+
+- `RouteErrorBoundary` is declared as `ErrorBoundary` on every
+  top-level route in `src/routes/router.tsx`. A data router catches a
+  render error from any route element itself and draws the nearest
+  route `ErrorBoundary`, so this component catches everything the
+  router renders — every surface, modal sub-route and the shell.
+- `AppErrorBoundary` wraps `RouterProvider` in `src/main.tsx` and
+  catches what the route boundary does not: a throw from a provider
+  above the router or from the router component itself.
+
+Both publish the same `error` signal through `errorPayload` and both
+draw `CrashFallback`. An operator reading a crash screen cannot tell
+which one caught, and neither can.
+
+### The fallback
+
+`CrashFallback` shows the one sentence saying what happened, the
+thrown message in `@ar/ui`'s `Banner` component with its tone set to
+danger, and three controls that are always drawn: a "try again" button
+that calls the boundary's `reset`, a "reload the page" button that
+throws the tab away, and the browser's back button — and a fourth
+button "report this" only while a reporter is attached. The fallback
+is ONE component rather than two (dev and production) because the
+four-button case should stay on the tested path whether the reporter
+is there or not, and `import.meta.env.DEV` is not the right condition
+anyway — both test servers are dev servers but the widget mounts on
+only one.
+
+The fallback SUBSCRIBES to the `devtools` topic rather than reading
+`last` once, because the bridge installs on a later microtask than
+the first render. A read taken during the first render would be
+permanently wrong.
+
+### App signals
+
+`src/app-shell/appSignals.ts` imports NOTHING outside the language.
+No `react`, no `@ar/ui`, no storage, no network, and no
+`@ar/dev-tools` — that package is a devDependency and the Docker
+`web` stage holds its manifest and no `dist/`. A module that imports
+it would fail the image build. The channel exists because the two
+boundaries and the fallback have to survive in production, and
+choosing where a pub/sub lives is the difference between "must be
+production-safe" and "can reach dev-only code".
+
+The five topics are CLOSED at five by spec, and three of them make it
+into a production build:
+
+- `error` — a render failure, caught by either boundary and published
+  through `errorPayload`.
+- `route` — a navigation, published from one effect in
+  `AppLayout.tsx`.
+- `artefact` — which entity the current surface is about, published by
+  `useArtefactSignal` through the entity kind and id from a modal
+  sub-route, and `null` once the surface closes.
+
+The other two are the handshake between the app and a reporter, and
+never reach production:
+
+- `devtools` — `{installed}`, published BY the bridge (which is
+  dev-only) on install and from its disposer, read by `CrashFallback`
+  to decide whether a "report this" button exists.
+- `open-feedback` — published BY that button, consumed by the bridge
+  alone. The app side names no feature id and no item id: those are
+  the package's constants and the bridge's to spell.
+
+The channel is the reason `@ar/web` remains production-safe without
+`@ar/dev-tools` anywhere in its source: the bridge in `src/dev/`
+is reached only through a dynamic import behind `import.meta.env.DEV`
+in `src/main.tsx`, and a production build never loads it.

@@ -1,8 +1,9 @@
 /**
  * @packageDocumentation
  * The dev-tools wiring: the ONE config `@ar/dev-tools` is mounted
- * with — the three readings that fill it, and the one feature it
- * plugs in.
+ * with — the three readings that fill it, the one feature it plugs
+ * in, and the decision that says whether `./bridge.ts` goes up behind
+ * it.
  *
  * `../main.tsx` reaches this module through a dynamic import behind
  * `import.meta.env.DEV`, so nothing here runs in a production build.
@@ -146,41 +147,114 @@
  * grep that matched nothing anywhere.
  *
  * `grep -rl devtools packages/web/dist/` does name one file, the JS
- * bundle, and that hit is not this import: one occurrence, the string
- * `devtools:` inside react-router's list of unsafe URL protocols. It
- * predates this line. The capture of all of it is in this plan's
- * close-out notes.
+ * bundle, and none of what it holds is this import. Re-measured over
+ * a `bun run build` once the bridge landed, because the count moved:
+ * FOUR occurrences, not the one this paragraph used to record. One is
+ * the string `devtools:` in react-router's list of unsafe URL
+ * protocols and predates everything here; the other three are the
+ * app's OWN `devtools` signal topic — `../app-shell/appSignals.ts`'s
+ * roster and `../app-shell/CrashFallback.tsx`'s subscribe — which is
+ * production app code by decision 2 of
+ * `.rafa/specs/q20b-3-error-boundary-provider.md` and names no
+ * package.
+ *
+ * What says the package itself is absent is a sweep of seven
+ * discriminating literals over `dist/`, all `0`: `About`,
+ * `mountDevTools`, `data-devtools-root`, `__DEVTOOLS_COMMIT__`,
+ * `devtoolsBus`, `installGlobalCapture` and `shouldMountDevTools` —
+ * the last two being exactly what this module started importing. The
+ * control is `Agentic Research` over the same tree, which answers
+ * `1`. The capture of all of it is in this plan's close-out notes.
+ *
+ * ## The bridge goes up only when the widget really mounted
+ *
+ * `./bridge.ts` holds the wiring between `../app-shell/appSignals.ts`
+ * and the package's bus, and {@link startDevToolsOver} is the one
+ * place it is installed. Behind a reading rather than
+ * unconditionally, because a bridge over a widget that REFUSED
+ * publishes `devtools` `{installed: true}` to a fallback whose
+ * "report this" button then has nowhere to go: that button opens a
+ * menu row, and there is no menu.
+ *
+ * The reading is `shouldMountDevTools` over the same config and the
+ * same two environment readings `mountDevTools` takes it over itself,
+ * which is why the package exports all three rather than the
+ * predicate alone. The alternative was reading the environment from
+ * here, and it is worse than it looks: `navigator.webdriver` is easy
+ * enough, but `VITE_DEVTOOLS_FORCE=0` is a non-empty string, so an
+ * app testing that variable for truthiness reads the override as ON
+ * where the package's own negatives read it as off. The case that has
+ * to come out right is the default e2e server — `navigator.webdriver`
+ * true, no override — and it now reads exactly as a production build
+ * does.
+ *
+ * `mount(config)` is called through BOTH branches. The package owns
+ * its own refusal and answers a disposer either way, so nothing here
+ * second-guesses whether to call it; what the reading gates is
+ * whether the app is wired to what it drew.
+ *
+ * ## ... and one disposer takes both halves down, bridge first
+ *
+ * `../main.tsx` holds whatever {@link startDevTools} answers, and it
+ * has one thing to call. The bridge goes first because it is the half
+ * that can still publish onto the bus, and its own teardown ends by
+ * announcing `{installed: false}` — so by the time the widget is
+ * removed, nothing is left that would try to reach it.
+ *
+ * The `disposed` flag is held HERE and not borrowed. Both halves are
+ * idempotent today, but one of them arrives as an ARGUMENT, so the
+ * promise this function's return value makes is only kept if this
+ * function keeps it. React StrictMode runs an effect cleanup twice
+ * and this app renders under it.
+ *
+ * ## Why the composition takes its collaborators as arguments
+ *
+ * {@link startDevToolsOver} is handed the mount, the signals, the bus
+ * and the capture; {@link startDevTools} is the one line that fills
+ * all seven members with the real ones. The split is what makes any
+ * of this readable at all: `mountDevTools` appends to `document.body`
+ * and this package's unit runner is node-only, so a function that
+ * reached for the real five could be covered by no case here — and
+ * the package's `devtoolsBus` is a singleton whose ring every later
+ * case would then read. `./bridge.ts` states the same seam for the
+ * same reason; this module composes over it rather than repeating it.
  *
  * ## Mutation note — what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail. Each leg below was
  * measured by breaking this file, reds `bun x vitest run
- * src/dev/devtools.test.ts` from `packages/web` against the 20 cases
+ * src/dev/devtools.test.ts` from `packages/web` against the 32 cases
  * `./devtools.test.ts` holds, and restores this file byte-identical
- * (the harness compared the restored digest to the original, every
- * leg):
+ * (the harness compared the restored `sha256` to the original, every
+ * leg). All sixteen were re-measured when the bridge landed, because
+ * the file grew by twelve cases and every passed count below moved
+ * with it:
  *
  * - Dropping the `catch` from {@link probeDevToolsApiVersion} answers
- *   `Tests  1 failed | 19 passed (20)`: `answers null for a probe that
+ *   `Tests  1 failed | 31 passed (32)`: `answers null for a probe that
  *   rejects, rather than rejecting`, as `AssertionError: promise
  *   rejected "Error: offline" instead of resolving`.
  * - Nesting a value inside {@link devToolsExtra}'s record answers `2
- *   failed | 18 passed` — the flatness walk and the route case, that
+ *   failed | 30 passed` — the flatness walk and the route case, that
  *   one as `expected { path: '/digest' } to be '/digest'` — which is
  *   what makes the walk a reading rather than a formality: it can
  *   fail, and this is the leg that proves it.
  * - Reporting the surface as `activeSurfaceId(path)` with no fallback
- *   answers `2 failed | 18 passed`: the path that names no surface and
+ *   answers `2 failed | 30 passed`: the path that names no surface and
  *   the index path, both `expected undefined to be 'none'`. The
  *   flatness walk does NOT trip on it, measured — the record it reads
  *   is on a path that HAS a surface — so those cases are not one
  *   reading taken twice.
- * - Reading the three defines as bare identifiers answers `1 failed |
- *   19 passed` with `ReferenceError: __DEVTOOLS_COMMIT__ is not
+ * - Reading the three defines as bare identifiers answers `12 failed |
+ *   20 passed` with `ReferenceError: __DEVTOOLS_COMMIT__ is not
  *   defined`, raised from the unit runner, which is a build `define`
- *   never touched — the production build's shape as well.
+ *   never touched — the production build's shape as well. It used to
+ *   red ONE case; it now reds twelve, because {@link devToolsConfig}
+ *   reads {@link devToolsBuildVersion} and every start case builds a
+ *   config. That widening is the leg saying what the config is now
+ *   load-bearing for.
  * - Calling `feedbackFeature()` with no options — this file's whole
- *   contribution to the report form, undone — answers `1 failed | 19
+ *   contribution to the report form, undone — answers `1 failed | 31
  *   passed`: `hands the drawer the form renderer this app owns`, as
  *   `expected undefined to be [Function renderDevToolsReportForm]`.
  *   The widget still mounts and the row still opens; what is lost is
@@ -188,26 +262,64 @@
  *   renderer draws a working report either way. That single case is
  *   the whole guard on it.
  * - Spelling `module: 'ui'` here rather than leaving the package's
- *   default answers `1 failed | 19 passed`: `leaves the filing module
+ *   default answers `1 failed | 31 passed`: `leaves the filing module
  *   at the package default`, as `expected 'ui' to be 'web'`.
  * - Hoisting the list to a module constant, so every call answers one
- *   shared feature, answers `1 failed | 19 passed`: `builds a fresh
+ *   shared feature, answers `1 failed | 31 passed`: `builds a fresh
  *   feature per call`.
  * - Copying {@link renderDevToolsReportForm}'s three arguments — a
  *   spread of the fields, a spread of the values and an `onChange`
- *   wrapper — answers `1 failed | 19 passed`: `passes the three slot
+ *   wrapper — answers `1 failed | 31 passed`: `passes the three slot
  *   arguments on untouched`, failing on `Object.is equality` between
  *   two records that read identically. Nothing but that case reports
  *   it.
- * - Answering `null` from that renderer answers `3 failed | 17
+ * - Answering `null` from that renderer answers `3 failed | 29
  *   passed`, every renderer case at once, which is what says they are
  *   readings of an element rather than of a truthy return.
  *
- * `bun x tsc --noEmit` exits `0` under all nine, the bare-define leg
- * included, and that one is the reading worth keeping: `string |
+ * The seven legs the bridge added are read the same way:
+ *
+ * - Dropping the `shouldMountDevTools` gate — installing the bridge
+ *   whatever the environment said — answers `3 failed | 29 passed`:
+ *   both automation cases and `installs no bridge for a config the
+ *   widget would draw nothing for`.
+ * - Taking the reading over a FRESH {@link devToolsConfig} rather than
+ *   the one the mount is handed answers `1 failed | 31 passed`, that
+ *   one, and nothing else. It is the leg that says the config case
+ *   below is not decoration: two configs agree on the environment and
+ *   can disagree on `showEmpty`, and only a config-shaped refusal
+ *   reads the difference.
+ * - Installing the bridge on the package's shared `devtoolsBus`
+ *   instead of the bus it was handed answers `4 failed | 28 passed` —
+ *   every case that reads what the injected bus saw, the automation
+ *   refusal among them, since its control publishes four payloads and
+ *   sees none.
+ * - Dropping the `disposed` flag answers `1 failed | 31 passed`:
+ *   `takes each half down once for a disposer called twice`. The mount
+ *   stub in `./devtools.test.ts` is deliberately NOT idempotent, which
+ *   is what leaves that reading to this file rather than to the stub.
+ * - Taking the widget down before the bridge answers `1 failed | 31
+ *   passed`: `takes the bridge down before the widget`, the only case
+ *   that reads order, and it reads it from two marks pushed as they
+ *   happen rather than from a list compared afterwards.
+ * - Leaving the bridge out of the teardown entirely answers `3 failed
+ *   | 29 passed`: the disposal announcement, the disposer-twice case
+ *   and the ordering case.
+ * - Skipping the mount when the reading refuses answers `1 failed | 31
+ *   passed`: `calls the mount even when it installs no bridge`. That
+ *   single case is the whole guard on the package keeping its own
+ *   refusal.
+ *
+ * `bun x tsc --noEmit` exits `0` under all sixteen, the bare-define
+ * leg included, and that one is the reading worth keeping: `string |
  * undefined` is assignable to an optional `commit?: string`, so
  * nothing about a removed `typeof` guard is a type error and only the
- * suite says the guard has gone.
+ * suite says the guard has gone. `bun x eslint src/dev/devtools.ts`
+ * exits `0` under eleven of the sixteen and `1` under five, every one
+ * of those five on `@typescript-eslint/no-unused-vars` over a binding
+ * the mutation orphaned — plus a `prefer-const` over the same
+ * binding in the `disposed` leg — rather than on the behaviour each
+ * changed. A lint run is therefore not a reading of any leg here.
  *
  * ## ... and the two opposite cases, recorded rather than defended
  *
@@ -219,37 +331,58 @@
  * stays because a fixture build should answer `null` by decision
  * rather than by falling through an exception handler.
  *
- * {@link startDevTools}'s `features` member is the second, and there
+ * {@link devToolsConfig}'s `features` member is the second, and there
  * NOTHING reports it. Passing `features: []` while
- * {@link devToolsFeatures} still answers the list leaves all 20 cases
- * green, `tsc` at `0` and `lint` at `0` — all three measured. The
- * unit runner is node-only and `mountDevTools` appends to
- * `document.body`, so no case in this project can call that function
- * at all, and no spec drives the app's own widget today: the
- * dev-tools e2e spec runs against a harness page that configures its
- * own features. What will read this member is the forced Playwright
- * spec this plan's E2E stage adds, which opens the widget over the
- * app and clicks the `Report feedback` row.
+ * {@link devToolsFeatures} still answers the list leaves all 32 cases
+ * green, `tsc` at `0` and `lint` at `0` — all three measured again
+ * with the bridge in place. The cases DO drive that config now, but
+ * they read the mount's copy of it and the decision taken over it,
+ * neither of which cares what is in the list: `shouldMountDevTools`
+ * counts an empty list only when `showEmpty` is `false`, and this app
+ * never says so. No spec drives the app's own widget today either —
+ * the dev-tools e2e spec runs against a harness page that configures
+ * its own features. What will read this member is the forced
+ * Playwright spec this plan's E2E stage adds, which opens the widget
+ * over the app and clicks the `Report feedback` row.
+ *
+ * {@link startDevTools} itself is the third and is the same shape:
+ * the seven members it fills are the real mount, the real channel,
+ * the real bus and the real capture, and a case that could read them
+ * would have to mount a widget into a `document` this runner does not
+ * have. The e2e stage's forced spec is what reads them, through the
+ * widget it opens.
  */
 
+import type { DevToolsCaptureInstaller } from './bridge';
+import type { AppSignals } from '../app-shell/appSignals';
 import type { ProbeAuthCall } from '../data/auth';
 import type { DataSource } from '../data/source';
 import type {
   Corner,
+  DevToolsBus,
   DevToolsConfig,
   DevToolsDisposer,
   DevToolsFeature,
 } from '@ar/dev-tools';
 import type { ReportFormRenderer } from '@ar/dev-tools/feedback';
 
-import { mountDevTools } from '@ar/dev-tools';
+import {
+  devtoolsBus,
+  installGlobalCapture,
+  isDevToolsAutomated,
+  isDevToolsForced,
+  mountDevTools,
+  shouldMountDevTools,
+} from '@ar/dev-tools';
 import { feedbackFeature } from '@ar/dev-tools/feedback';
 import { createElement } from 'react';
 
+import { appSignals } from '../app-shell/appSignals';
 import { probeAuth } from '../data/auth';
 import { resolveDataSource } from '../data/source';
 import { activeSurfaceId } from '../routes/paths';
 
+import { installDevToolsBridge } from './bridge';
 import { ReportForm } from './ReportForm';
 
 import '@ar/dev-tools/styles.css';
@@ -395,23 +528,135 @@ export function devToolsFeatures(): readonly DevToolsFeature[] {
 }
 
 /**
- * Mount the dev-tools widget over this app.
+ * The whole of what this app tells the widget about itself.
  *
- * {@link devToolsFeatures} is the whole plug-in list, so the trigger,
- * Position, About and one `Report feedback` row are what appears.
+ * Its own function rather than an object literal inside
+ * {@link startDevTools}, because the config is read TWICE now: the
+ * mount takes it, and so does the decision that gates the bridge. One
+ * value passed to both is what makes "the same config" a fact rather
+ * than a claim — see this module's documentation.
+ *
  * `endpoint` is left unstated — the package's default and the
  * plugin's route are the same path, and naming it here would be a
  * second place for them to disagree.
  *
- * @returns The package's disposer. Calling it takes the widget down;
- * calling it more than once is harmless.
+ * @returns The config `mountDevTools` is called with, fresh per call
+ * because {@link devToolsFeatures} is.
  */
-export function startDevTools(): DevToolsDisposer {
-  return mountDevTools({
+export function devToolsConfig(): DevToolsConfig {
+  return {
     corner: DEVTOOLS_CORNER,
     features: devToolsFeatures(),
     version: devToolsBuildVersion(),
     extra: () => devToolsExtra(window.location.pathname, DATA_SOURCE),
     apiVersion: () => probeDevToolsApiVersion(probeAuth),
+  };
+}
+
+/** Everything {@link startDevToolsOver} is handed, and never reaches for. */
+export interface DevToolsStartInput {
+  /** What both the mount and the decision read. */
+  readonly config: DevToolsConfig;
+
+  /** `isDevToolsAutomated()` in the app; a fixed reading in a case. */
+  readonly automated: boolean;
+
+  /** `isDevToolsForced()` in the app; a fixed reading in a case. */
+  readonly forced: boolean;
+
+  /** `mountDevTools` in the app; a recording stub in a case. */
+  readonly mount: (config: DevToolsConfig) => DevToolsDisposer;
+
+  /** The app's channel — `appSignals` in the app, a fresh one in a case. */
+  readonly signals: AppSignals;
+
+  /** The widget's bus — `devtoolsBus` in the app, an injected one in a case. */
+  readonly bus: DevToolsBus;
+
+  /** `installGlobalCapture` in the app; a stub in a case. */
+  readonly capture: DevToolsCaptureInstaller;
+}
+
+/**
+ * Mount the widget and, only if it really mounted, bridge the app to
+ * it.
+ *
+ * The composition, over collaborators it is handed rather than ones it
+ * reaches for: `mountDevTools` appends to `document.body` and the unit
+ * runner here is node-only, so a function that imported the real four
+ * could be read by no case in this package. See this module's
+ * documentation for the decision it takes and the order it takes
+ * things down in.
+ *
+ * @param input - The config, the two environment readings, the mount
+ * and the bridge's own three collaborators.
+ * @returns ONE disposer, covering the widget and the bridge. Calling
+ * it more than once is harmless.
+ */
+export function startDevToolsOver(input: DevToolsStartInput): DevToolsDisposer {
+  const { config, automated, forced, mount, signals, bus, capture } = input;
+
+  // Taken BEFORE the mount, and over the same config and the same two
+  // readings the mount takes it over itself, so the two answers are
+  // identical by construction rather than by review.
+  const mounting = shouldMountDevTools({ config, automated, forced });
+
+  // Called either way: the package owns its own refusal and answers a
+  // disposer through both branches, so nothing here second-guesses it.
+  // What the reading above gates is the BRIDGE.
+  const disposeWidget = mount(config);
+
+  if (!mounting) {
+    return disposeWidget;
+  }
+
+  const disposeBridge = installDevToolsBridge({ signals, bus, capture });
+
+  // Held HERE and not borrowed from the two halves. Both of them are
+  // idempotent today, but one of them arrives as an argument — a
+  // case's stub, or whatever a later caller passes as `mount` — so a
+  // promise this function makes about its own return value is kept
+  // only if this function keeps it. A React effect cleanup runs twice
+  // under StrictMode, and this app renders under it.
+  let disposed = false;
+
+  return () => {
+    if (disposed) {
+      return;
+    }
+
+    disposed = true;
+
+    // The bridge first. It is the half that can still publish onto the
+    // bus, and its own teardown ends by announcing `{installed:
+    // false}` — so by the time the widget goes, nothing is left that
+    // would try to reach it.
+    disposeBridge();
+    disposeWidget();
+  };
+}
+
+/**
+ * Mount the dev-tools widget over this app, and wire the app to it.
+ *
+ * {@link devToolsFeatures} is the whole plug-in list, so the trigger,
+ * Position, About and one `Report feedback` row are what appears.
+ * {@link startDevToolsOver} is the whole of the behaviour; this
+ * function is the line that fills its seven members with the real
+ * ones, and it is the only place in the app that names
+ * `appSignals` and `devtoolsBus` together.
+ *
+ * @returns One disposer, taking down the bridge and then the widget.
+ * Calling it more than once is harmless.
+ */
+export function startDevTools(): DevToolsDisposer {
+  return startDevToolsOver({
+    config: devToolsConfig(),
+    automated: isDevToolsAutomated(),
+    forced: isDevToolsForced(),
+    mount: mountDevTools,
+    signals: appSignals,
+    bus: devtoolsBus,
+    capture: installGlobalCapture,
   });
 }

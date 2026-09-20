@@ -160,6 +160,36 @@ the feature works), while the drop zone IS driven with a fixture PNG to
 assert the file path writes and the preview thumbnail renders. Decision 3
 of the spec spells this split: capture API first, drop zone always.
 
+The third forced spec in `tests/e2e/dev-tools-boundary.spec.ts` drives the
+app error boundary and its fallback at 5177 with `VITE_DEVTOOLS_FORCE=1`,
+so the widget mounts and the bridge installs. It throws from `/__devtools
+/crash` to render the fallback, asserts the boundary kept the app standing
+with the tomato visible, verifies "report this" opens the feedback drawer
+with the thrown error in the context block, and confirms a navigation
+publishes the `route` signal read back through `page.evaluate` over the bus.
+
+That spec is a FORCED spec — added to `DEVTOOLS_SPECS` in
+`playwright.config.ts` IN THE SAME COMMIT as the file — which means the
+default `chromium` project's `testIgnore` holds it, so it never runs
+against the plain 5174 server. A dev-tools spec named in NEITHER the
+forced-project `testMatch` NOR the default project's `testIgnore` is not
+skipped: it is collected by the DEFAULT project and driven against the
+plain 5174 server, where `navigator.webdriver` is true, `VITE_DEVTOOLS
+_FORCE` is unset, and the widget is absent by design. Every locator times
+out against an app carrying no mount point.
+
+The default e2e suite carries its own control: one case in
+`tests/e2e/shell.spec.ts` that drives the crash path at 5174 and asserts
+the fallback with reload and try-again controls and NO "report this"
+button. That is the PRODUCTION READING — the same error with no bridge
+installed draws the fallback exactly as it would in a production build,
+where the dev-tools package is not loaded at all. The boundary and its
+fallback are app-local and survive in every build; the bridge and the
+widget are guarded by `import.meta.env.DEV` and absent from production.
+The default-server control proves both halves: the boundary's fallback
+shows the right shape when the widget is absent, and the guard held — no
+dev-tools code shipped in the production bundle.
+
 Opening a Radix dropdown (the template select) in a spec follows the `@ar/ui
 Select` pattern from the locator vocabulary: the trigger is a `button` with
 an accessible name from its `ariaLabel`, its panel is a `role="menu"` of
@@ -194,6 +224,48 @@ Two readings that shipped with it, both measured rather than reasoned:
   `toHaveScreenshot` at all (two baseline-name collision guards plus
   two live reads of tree/rail state). 48 breakpoint shots + 8
   dynamic-form shots = the 56.
+
+Four more readings a dev-tools spec needs, all measured while the
+boundary spec was written:
+
+- Nothing exposes `devtoolsBus` on `window`, so a spec that must read
+  the bus imports it INSIDE `page.evaluate` from the `/@fs/` URL Vite
+  serves the package's built entry at, and gets the same cached module
+  instance the app's own static import populated. `@ar/dev-tools` is a
+  LINKED workspace package rather than a pre-bundled dependency, so it
+  has no stable `node_modules/.vite/deps` URL to address — the path is
+  its real filesystem one under an `/@fs/` prefix. Build it from
+  `import.meta.url` through `fileURLToPath` and a relative `new
+  URL(...)`, the way the existing PNG fixture path is built, so it
+  holds on any checkout rather than on this one.
+- The drawer's read-only **Context** field is not a native `select`.
+  `reportFormAdapter.ts` maps a readonly report field onto a
+  single-option ENUM leaf — the dynamic-form contract has no disabled
+  or `readOnly` leaf, so the one leaf whose value no edit can move is
+  what it gets — and `@ar/ui`'s `Select` draws that as the Radix menu
+  trigger described in the locator vocabulary below. Read it with
+  `getByRole('button', { name: 'Context' })` and its TEXT CONTENT,
+  never through `selectOption` or an `option` locator. What the block
+  CONTAINS is composed in `drawerModel.ts` (one key-value line per
+  fact, `CONTEXT_LABEL`); assert against `describeFeedbackContext`'s
+  output rather than re-deriving the record inside the spec.
+- `import.meta.env` IS defined under this package's vitest project,
+  with `MODE` `test`, `DEV` `true` and `PROD` `false`, and
+  `process.env` merged in — so the unit suite reads the DEV route
+  tree, crash route included. `src/data/api.ts`'s docblock reads at a
+  glance like it says otherwise; its measurement is about the
+  PLAYWRIGHT node process, which has no `import.meta.env` at all.
+  Probing this needs a file write from a throwaway test: the runner
+  swallows `console.log` on a PASSING case.
+- To drive the widget as a real developer's browser sees it — against
+  a plain `bun run dev`, no `VITE_DEVTOOLS_FORCE`, no second server —
+  override `navigator.webdriver` to `false` with
+  `context.addInitScript` BEFORE the first navigation.
+  `packages/dev-tools/src/core/mount.ts`'s `isDevToolsAutomated()`
+  reads exactly that property, which Playwright's Chromium reports
+  `true`. This is the technique for a hand-run that must answer "what
+  does `bun run dev` show a person", not for a suite spec — the forced
+  5177 project is the supported path for those.
 
 Reading a run:
 

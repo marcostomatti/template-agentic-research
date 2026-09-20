@@ -122,6 +122,7 @@ import {
 import { useId, useState } from 'react';
 import { useParams } from 'react-router';
 
+import { useArtefactSignal } from '../../app-shell/useArtefactSignal';
 import {
   EMPTY_EDITOR_DRAFT,
   withDraftValues,
@@ -135,6 +136,16 @@ import {
   readSourceKind,
   sourceKindChoices,
 } from './editor';
+
+/**
+ * This surface's own word for what it edits, on the `artefact` topic.
+ *
+ * Three modal sub-routes hang off the sources list and all three
+ * carry a SOURCE id, so the kind names the modal rather than the
+ * entity: this bare one is the editor, `source-config` is the
+ * proposal ruling and `source-failures` is the failure queue.
+ */
+const ARTEFACT_KIND = 'source';
 
 /** What the header says while the source's own read is in flight. */
 const PENDING_TITLE = 'Source';
@@ -177,6 +188,12 @@ export const SourceEditorModal = () => {
     domainSlug?: string;
     entityId?: string;
   }>();
+
+  // Say what this surface is about for as long as it is open. The RAW
+  // route segment, not the numeric id below: a segment that is not a
+  // number is a live address here, and `NaN` is not an entity anything
+  // could look up.
+  useArtefactSignal(ARTEFACT_KIND, entityId);
 
   // `:entityId` is a required segment so it cannot arrive empty, but a
   // segment that is not a number is a live address: `Number` answers

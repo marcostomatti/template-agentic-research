@@ -74,13 +74,70 @@ fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
 said the latter until the constant was read
 (`DEVTOOLS_DEFAULT_OUT_DIR` in `src/vite/store.ts`). It is a RELATIVE
 path handed straight to `join()`, so it resolves against the cwd of
-the process running the dev server, not against the repo root: started
-the usual way (`bun run dev` from inside `packages/web`), a stored
-report lands at `packages/web/.rafa/feedback/<round>/…`, and the path
-in the endpoint's JSON response is relative too. Both locations are
+the process running the dev server, not against the repo root: left
+unstated and started the usual way (`bun run dev` from inside
+`packages/web`), a stored report lands at
+`packages/web/.rafa/feedback/<round>/…`, and the path in the
+endpoint's JSON response is relative too. Both locations are
 gitignored either way — the repo-root `.gitignore`'s `.rafa/` pattern
 is unanchored and matches the nested directory as well — so nothing
 tracked is at risk; it is only where to look for a report by hand.
+
+A caller that wants one fixed location therefore passes an ABSOLUTE
+path, which is what `packages/web/vite.config.ts` does:
+`resolve(import.meta.dirname, '../../.rafa/feedback')`, so every
+report in this repo lands under the repo root's `.rafa/feedback/`
+whatever directory the dev server was started from. Written relative
+instead, `../../.rafa/feedback` would only reach the root while the
+cwd stayed `packages/web`; from the repo root the same two `..`
+segments resolve above the checkout, and nothing refuses — `store.ts`
+creates the round directory with `mkdir(…, {recursive: true})`, so a
+mis-resolved `outDir` writes a fresh tree somewhere else silently.
+The stored path also travels: `POST /__devtools/report` answers it
+and `src/vite/gateway/rafa.ts` lists the attachment paths in the
+issue body it files, so it should name the same place read from
+anywhere. The `templates` option resolves the same way but is left
+relative there, because those paths are only read and a miss answers
+`[]` rather than creating anything.
+
+## DevToolsBus Topics and Methods
+
+The `devtoolsBus` module exports `publish(topic, payload)`,
+`subscribe(topic, callback)`, `unsubscribe()`, and `recent(topic, n)`.
+
+### Topics and Payloads
+
+| Topic | Payload Shape | Published by |
+| --- | --- | --- |
+| `error` | `{message, stack, href, at}` | Error boundary and global capture |
+| `route` | `{path, search, at}` | App layout on navigation |
+| `artefact` | `{kind, id, at}` | Modal editors when focused |
+| `open-item` | `{featureId, itemId}` | App fallback when reporting |
+
+All payloads carry an `at` timestamp (ms since epoch).
+
+### `recent(topic, n) → Payload[]`
+
+Returns the N most recent payloads for a topic, newest first. For
+`error`, the ring holds at most 20 payloads; older errors are dropped
+when the cap fills. `recent('error', 5)` returns up to 5 of the 20
+held, reordered with the newest first. Other topics hold one payload
+per session and answer it until replaced.
+
+Requesting more items than exist returns fewer. Requesting zero returns
+`[]`. An untouched topic answers `[]`.
+
+### Global Error Capture
+
+Call `installGlobalCapture(bus)` to add window-level `error` and
+`unhandledrejection` event listeners. Both publish to the bus's `error`
+topic with the error message, first stack line, `location.href` and
+a `Date.now()` timestamp.
+
+The `error` event listener fires on throws inside event handlers and
+timers. The `unhandledrejection` listener fires on unhandled promise
+rejections. Both are called only AFTER the bridge has subscribed to
+`error`, so the payloads appear in `recent('error', n)` calls.
 
 ## Feedback Feature
 
@@ -121,8 +178,10 @@ The three appended fields are:
   parent, ArrowDown returns.
 - `context` (`readonly`): automatically collected: viewport, device
   pixel ratio, colour scheme, `data-theme` if present, user agent,
-  `location.href`, app version, and the bus's last `error` and
-  `artefact` when present. Never opted out.
+  `location.href`, app version, the five newest `error` payloads from
+  `bus.recent('error', 5)` (each holding message, stack, href, and
+  timestamp), and the current `artefact`, each when present. Never
+  opted out.
 
 ### Form Renderer Slot
 
@@ -308,6 +367,13 @@ Stores a report and attachments.
 any gateway runs. It is NOT `gateway.id`, which is the tracker's own
 issue id; both are present in the same response and read alike in a
 log, so name which one a reading means.
+
+The RESPONSE is the only place the two ever meet. `store.ts` writes
+the file before the gateway runs and nothing round-trips the answer
+back onto it, so the stored `.json` never carries the issue id or the
+tracker name — reading it back off disk to learn "what did this file
+as" answers nothing. Take the id from the drawer's own `role="status"`
+line (`Filed as <id> on <tracker>.`) or from the tracker directly.
 
 ### `POST /__devtools/comment`
 

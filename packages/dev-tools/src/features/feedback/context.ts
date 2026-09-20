@@ -4,8 +4,8 @@
  * viewport, the device pixel ratio, the colour scheme, the app's
  * `data-theme` when it has set one, the user agent, the current URL,
  * the build the widget was handed, whatever the app puts in its own
- * context getter, and the last thing published on the bus's `error`
- * and `artefact` topics.
+ * context getter, the last five failures published on the bus's
+ * `error` topic and the current `artefact`.
  *
  * One exported function, {@link collectFeedbackContext}, and a flat
  * record out. `./body.ts` drops that record into the report's
@@ -19,8 +19,8 @@
  * Every value that reaches the answer has passed
  * {@link isFeedbackContextValue}: a `string`, a `boolean` or a FINITE
  * `number`, and nothing else. That holds for the keys this module
- * reads itself, for the ones `host.context()` hands over and for the
- * two bus payloads alike, so a caller can render the record with
+ * reads itself, for the ones `host.context()` hands over and for
+ * every bus payload alike, so a caller can render the record with
  * `String(value)` and serialise it with `JSON.stringify` and be sure
  * neither will meet a nested object, a `null`, a `NaN` or a function.
  *
@@ -43,10 +43,20 @@
  * The app winning over the first two is the reading `./core/host.ts`
  * already takes — its `context()` lets an app key win over the fixed
  * key of the same name — and this module does not reverse it one
- * layer up. The bus last, because its two keys are named after the
- * topics they carry and an app that writes `error` in its own
- * `extra()` is saying something about the same subject the `error`
- * topic is for; the published payload is the more recent of the two.
+ * layer up. The bus last, because its keys are named after the topics
+ * they carry and an app that writes `error` in its own `extra()` is
+ * saying something about the same subject the `error` topic is for;
+ * the published payload is the more recent of the two.
+ *
+ * ## Five failures, one artefact
+ *
+ * The `error` topic is read through `recent('error', 5)` and lands as
+ * up to five keys — `error` for the newest, then `errorPrevious1` to
+ * `errorPrevious4` — while the artefact stays the single `last`
+ * reading it has always been. {@link readBus} says why the two topics
+ * are read differently and {@link feedbackErrorKey} what a number in
+ * a key means. Neither read pads: a bus holding two failures answers
+ * two keys, and one holding none answers none.
  *
  * ## What is NOT collected, and why
  *
@@ -87,49 +97,69 @@
  * A green suite is not evidence a case can fail. Each leg below was
  * measured by breaking this file, reds `bun x vitest run
  * src/features/feedback/context.test.ts` from `packages/dev-tools`
- * against the 27 cases the file holds, and restores this file
+ * against the 34 cases the file holds, and restores this file
  * byte-identical (the harness compared the restored text to the
  * original, every leg):
  *
- * - Writing the `theme` key unconditionally — `getAttribute` straight
- *   into the record — answers `Tests  4 failed | 23 passed (27)`: the
- *   two absent-theme refusals, the key-set pin, and the body case,
- *   which reds because an empty string from the document element
- *   satisfies a `??` that then never asks the body.
+ * - Writing the `theme` key unconditionally — `getAttribute(…) ?? ''`
+ *   straight into the record — answers `Tests  4 failed | 30 passed
+ *   (34)`: the two absent-theme refusals, the key-set pin, and the
+ *   body case, which reds because an empty string from the document
+ *   element satisfies a `??` that then never asks the body.
  * - Reading `data-theme` off `document.documentElement` alone answers
- *   `1 failed | 26 passed`: `reads a data-theme set on the body when
+ *   `1 failed | 33 passed`: `reads a data-theme set on the body when
  *   the element has none`.
  * - Merging the bus keys UNDER `host.context()` answers `1 failed |
- *   26 passed`: `lets a published payload win over an app key of the
+ *   33 passed`: `lets a published payload win over an app key of the
  *   same name`.
  * - Merging `host.context()` UNDER the environment keys answers `1
- *   failed | 26 passed`: `lets an app key win over a key this module
+ *   failed | 33 passed`: `lets an app key win over a key this module
  *   read itself`.
  * - Dropping `Number.isFinite` from {@link isFeedbackContextValue}
- *   answers `3 failed | 24 passed`: the non-finite bus number, the
+ *   answers `3 failed | 31 passed`: the non-finite bus number, the
  *   non-finite device pixel ratio, and the smuggled-value case, whose
  *   record carries a `NaN` among its nested members.
- * - Passing both bus payloads through without
- *   {@link summariseBusPayload} answers `4 failed | 23 passed`: the
- *   blank payload, the `Error`, the record and the cap.
- * - Dropping the `JSON.stringify` try/catch answers `1 failed | 26
+ * - Passing every bus payload through without
+ *   {@link summariseBusPayload} answers `6 failed | 28 passed`: the
+ *   blank payload, the gap case, the ring-wide summary case, the
+ *   `Error`, the record and the cap.
+ * - Dropping the `JSON.stringify` try/catch answers `1 failed | 33
  *   passed`: `omits a bus payload that cannot be serialised`, which
  *   reds as the cycle's `TypeError` escaping
  *   {@link collectFeedbackContext} rather than as a wrong value.
  * - Dropping the `null`-and-non-finite guard, leaving both to the
- *   serialiser, answers `2 failed | 25 passed`: the `NaN` payload and
+ *   serialiser, answers `2 failed | 32 passed`: the `NaN` payload and
  *   the `null` payload, each of which would otherwise be reported as
  *   the four characters `null`.
- * - Removing the length cap answers `1 failed | 26 passed`: `caps a
- *   long bus payload rather than carrying all of it`.
+ * - Removing the length cap answers `2 failed | 32 passed`: `caps a
+ *   long bus payload rather than carrying all of it` and `summarises
+ *   every error in the ring, not only the newest`, whose oldest
+ *   payload is capped too.
  * - Answering `light` rather than {@link DEVTOOLS_UNKNOWN_VERSION}
- *   when `matchMedia` is absent answers `1 failed | 26 passed`:
+ *   when `matchMedia` is absent answers `1 failed | 33 passed`:
  *   `answers unknown when the browser cannot say what it prefers`.
+ * - Restoring the single `last('error')` read this module used before
+ *   the ring existed answers `6 failed | 28 passed`, and those six are
+ *   exactly the ring's own cases: the short ring, the sixth-oldest
+ *   refusal, the gap, the full key set, the newest-first order and the
+ *   ring-wide summary. It is the control for the whole read — every
+ *   other case in the file stays green under it, `error` included,
+ *   which is what "the existing key set otherwise unchanged" means
+ *   here.
+ * - Numbering the error keys by their place in the RECORD — summarise,
+ *   drop what cannot be reported, then number what is left — answers
+ *   `1 failed | 33 passed`: `leaves an unreportable error its own
+ *   number rather than closing the gap`, the one case that can tell
+ *   the two numberings apart.
+ * - Reading `recent('error', 20)` instead of
+ *   {@link FEEDBACK_CONTEXT_ERROR_DEPTH} answers `1 failed | 33
+ *   passed`: `omits every error older than the fifth`. The depth is
+ *   pinned by that case alone, which is why it publishes six.
  *
- * `bun x tsc --noEmit` exits `0` under ALL TEN, measured one by one:
- * every mutation above is a behaviour change over types that still
- * line up, so `check-types` would never report one and the suite is
- * the only gate that does.
+ * `bun x tsc --noEmit` exits `0` under ALL THIRTEEN, measured one by
+ * one: every mutation above is a behaviour change over types that
+ * still line up, so `check-types` would never report one and the suite
+ * is the only gate that does.
  */
 
 import type { DevToolsBus, DevToolsHost } from '../../core/types';
@@ -155,6 +185,25 @@ export const FEEDBACK_CONTEXT_VALUE_LIMIT = 500;
 
 /** What marks a value the cap cut short. Plain ASCII, deliberately. */
 export const FEEDBACK_CONTEXT_ELLIPSIS = '...';
+
+/**
+ * How many `error` payloads a report carries, newest first.
+ *
+ * Five rather than the twenty the bus keeps: the whole record is
+ * quoted into an issue body, each payload is worth up to
+ * {@link FEEDBACK_CONTEXT_VALUE_LIMIT} characters there, and a reader
+ * triaging one failure reads the few before it — not the whole
+ * session. The bus still holds the rest for anything that asks it
+ * directly.
+ *
+ * Not exported: `context.test.ts` spells the five key names out, for
+ * the reason `./core/bus.ts` gives about its own cap — a case
+ * asserting against this constant would pass for whatever it said.
+ */
+const FEEDBACK_CONTEXT_ERROR_DEPTH = 5;
+
+/** The key the NEWEST `error` payload is written under. */
+const FEEDBACK_CONTEXT_ERROR_KEY = 'error';
 
 /** The attribute the app writes its resolved theme onto. */
 const THEME_ATTRIBUTE = 'data-theme';
@@ -241,9 +290,10 @@ function cap(text: string): string {
  * record already handles.
  *
  * An `Error` from another realm — an iframe, a worker — is not an
- * `Error` to `instanceof` and lands as its JSON form, `{}`. Nothing
- * publishes on this bus yet at all, and when a producer arrives it
- * will be app code in the page's own realm.
+ * `Error` to `instanceof` and lands as its JSON form, `{}`. Neither
+ * producer hands one over: `src/core/globalCapture.ts` flattens what
+ * it captured to four primitives before publishing, and the app's
+ * bridge is code in the page's own realm.
  *
  * @param payload - What {@link DevToolsBus.last} answered.
  * @returns The value for that key, or `undefined` to omit it.
@@ -371,19 +421,55 @@ function readVersion(version: DevToolsHost['version']): Record<string, unknown> 
 }
 
 /**
- * The last `error` and `artefact` published, when either was.
+ * What one `error` payload is called, by its age.
  *
- * Nothing in this plan publishes on the bus, so both keys are absent
- * for the whole life of the app today. That is the normal case and
- * not a failure — `./core/bus.ts` says so — and it is why the
- * colocated cases put the empty bus first.
+ * The number is the payload's place in the RING, not its place in the
+ * record: a payload {@link summariseBusPayload} cannot report leaves
+ * its own number absent and the older ones keep theirs, so
+ * `errorPrevious2` is the third-newest failure in every report that
+ * carries the key. A record holding `error` and `errorPrevious2` with
+ * nothing between them is that case, and renumbering to close the gap
+ * would make the older keys lie about which failure they are.
+ *
+ * @param index - Its position in {@link DevToolsBus.recent}, `0`
+ * being the newest.
+ * @returns {@link FEEDBACK_CONTEXT_ERROR_KEY} for the newest,
+ * `errorPrevious<index>` for every older one.
+ */
+function feedbackErrorKey(index: number): string {
+  return index === 0
+    ? FEEDBACK_CONTEXT_ERROR_KEY
+    : `${FEEDBACK_CONTEXT_ERROR_KEY}Previous${index}`;
+}
+
+/**
+ * The last few `error` payloads and the current `artefact`.
+ *
+ * A bus with nothing published on either topic answers no key at all.
+ * That is a normal reading rather than a failure — `./core/bus.ts`
+ * says so — and it is why the colocated cases put the empty ring
+ * first.
+ *
+ * The errors go through {@link DevToolsBus.recent} and the artefact
+ * through {@link DevToolsBus.last}, which is the difference between
+ * the two topics rather than an inconsistency: a report is filed
+ * ABOUT one artefact, and the ones looked at before it say nothing
+ * about the failure, while the failures before the reported one are
+ * often the whole story — a boundary catches the second throw of a
+ * render loop and the first is the one worth reading.
  *
  * @param bus - {@link DevToolsHost.bus}.
- * @returns At most two keys.
+ * @returns At most {@link FEEDBACK_CONTEXT_ERROR_DEPTH} error keys and
+ * the artefact key.
  */
 function readBus(bus: DevToolsBus): Record<string, unknown> {
+  const errors = bus.recent('error', FEEDBACK_CONTEXT_ERROR_DEPTH);
+
   return {
-    error: summariseBusPayload(bus.last('error')),
+    ...Object.fromEntries(errors.map((payload, index) => [
+      feedbackErrorKey(index),
+      summariseBusPayload(payload),
+    ])),
     artefact: summariseBusPayload(bus.last('artefact')),
   };
 }

@@ -1,5 +1,7 @@
 import type { PluginOption, UserConfig } from 'vite';
 
+import { resolve } from 'node:path';
+
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -29,6 +31,38 @@ const DEVTOOLS_ISSUE_TEMPLATE_PATHS: readonly string[] = [
 ];
 
 /**
+ * Where a filed report is stored: the REPO ROOT's `.rafa/feedback`,
+ * as an absolute path resolved from this file's own directory.
+ *
+ * `devtoolsPlugin` passes `outDir` through to `store.ts` untouched,
+ * which hands it to `node:path`'s `join()`, so a relative value
+ * resolves against the cwd of the process running the dev server —
+ * `packages/web` for the usual `bun run dev`, which is why reports
+ * landed under `packages/web/.rafa/feedback/<round>/` while this
+ * option went unstated and the plugin's own `.rafa/feedback` default
+ * applied.
+ *
+ * Written relative (`../../.rafa/feedback`) it would reach the repo
+ * root only while that cwd holds. Started from the repo root instead,
+ * the same two `..` segments resolve ABOVE the checkout, and nothing
+ * refuses: `store.ts` creates the round directory with
+ * `mkdir(..., {recursive: true})`, so a mis-resolved `outDir` writes
+ * a new tree somewhere else silently rather than erroring. The path
+ * is also reproduced downstream — `POST /__devtools/report` answers
+ * the stored `path`, and `rafa.ts` lists the attachment paths in the
+ * issue body it files — so it has to name the same place read from
+ * anywhere. Resolving against `import.meta.dirname` pins it to this
+ * checkout's root whatever the cwd is.
+ *
+ * `DEVTOOLS_ISSUE_TEMPLATE_PATHS` above stays relative for the
+ * asymmetry between reading and writing: those paths are only READ,
+ * and a miss is non-fatal and visible (`GET /__devtools/templates`
+ * answers `[]` and the report-type select draws disabled), whereas
+ * this one is written to.
+ */
+const DEVTOOLS_OUT_DIR = resolve(import.meta.dirname, '../../.rafa/feedback');
+
+/**
  * The dev-tools plugin under `serve`, and nothing under `build`.
  *
  * The specifier is only ever resolved on the `serve` path, so a checkout
@@ -47,6 +81,7 @@ const loadDevtoolsPlugins = async (
   const { devtoolsPlugin, rafaGateway } = await import('@ar/dev-tools/vite');
   return [devtoolsPlugin({
     gateway: rafaGateway(),
+    outDir: DEVTOOLS_OUT_DIR,
     templates: DEVTOOLS_ISSUE_TEMPLATE_PATHS,
   })];
 };

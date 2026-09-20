@@ -214,12 +214,21 @@ Fill in the form fields. The drawer appends three automatic fields:
 
 Enter a title and body text describing the issue. Click **File** to submit.
 
+**This files a real issue.** In a checkout where `gh` and `rafa` are
+configured against the project tracker, **File** runs `rafa issue create` and
+opens a genuine, public GitHub issue — there is no dry-run or local-only mode
+in between. Only an unauthenticated checkout falls back to the local tracker
+described below. If you are rehearsing the flow rather than reporting a real
+defect, capture the id from the drawer's status line and close the issue with
+a comment saying so, right away, instead of leaving it as tracker noise.
+
 ### Where the PNG lands
 
-Screenshots are stored on your machine at `.rafa/feedback/<round>/` relative to the
-dev server's working directory. When you run `bun run dev` from `packages/web`, the
-path resolves to `packages/web/.rafa/feedback/<round>/…`. The files are gitignored,
-so nothing tracked is at risk. The issue tracker receives only the **path** to the
+Screenshots are stored on your machine at `.rafa/feedback/<round>/` under the REPO
+ROOT. `packages/web/vite.config.ts` passes the plugin an `outDir` resolved from the
+config file's own directory, so the location does not move with the directory you
+started the dev server from. The files are gitignored, so nothing tracked is at
+risk. The issue tracker receives only the **path** to the
 PNG, never the image bytes themselves — the tracker refers to it, but the file stays
 on your machine.
 
@@ -235,6 +244,16 @@ https://github.com/<owner>/<repo>/issues/new?template=<file>&title=[fb/<round>] 
 
 Copy the body text into that form and file it manually. The `[fb/<round>]` prefix
 and attachment paths are included for triagers to track the report's origin.
+
+### If the app crashes
+
+A render error in the app shows a fallback screen with an error heading, a
+**Reload** button (reloads the page), and a **Try again** button (re-renders
+the app tree from the error boundary). If the widget is mounted, a **Report
+this** button appears: click it to file a bug report using the same feedback
+form, pre-populated with the thrown error's message in the context block. The
+report is filed to `.rafa/feedback/<round>/` at the REPO ROOT, following the
+same storage and GitHub fallback as other reports.
 
 ## Troubleshooting / Known issues
 

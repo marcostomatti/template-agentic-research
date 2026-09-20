@@ -91,6 +91,7 @@ import {
 } from '@ar/ui';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
+import { useArtefactSignal } from '../../app-shell/useArtefactSignal';
 import {
   useResolveSourceFailure,
   useSource,
@@ -110,6 +111,16 @@ import {
   readFailureRuling,
   ruleOnFailure,
 } from './failures';
+
+/**
+ * This surface's own word for what it works through, on the
+ * `artefact` topic.
+ *
+ * The id is a SOURCE id, as it is in the two sibling modals, so the
+ * kind names the modal rather than the entity — see
+ * `./SourceEditorModal.tsx`, which carries the three-way split.
+ */
+const ARTEFACT_KIND = 'source-failures';
 
 /**
  * The route this modal closes to: the sources list it hangs under.
@@ -180,6 +191,12 @@ export const SourceFailuresModal = () => {
   }>();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+
+  // Say what this surface is about for as long as it is open. The RAW
+  // route segment, not the numeric id below: a segment that is not a
+  // number is a live address here, and `NaN` is not an entity anything
+  // could look up.
+  useArtefactSignal(ARTEFACT_KIND, entityId);
 
   // `:entityId` is a required segment so it cannot arrive empty, but a
   // segment that is not a number is a live address: `Number` answers

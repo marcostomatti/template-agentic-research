@@ -12,7 +12,10 @@
  *    rather than subtly wrong.
  * 2. `QueryProvider` from `@ar/ui/cache`, which owns the query client
  *    every `useCache` read in `../data/hooks` resolves against.
- * 3. `RouterProvider`, which mounts the layout route and everything
+ * 3. `AppErrorBoundary` from `../app-shell/AppErrorBoundary`, with
+ *    `CrashFallback` as its fallback, so a render failure anywhere
+ *    below leaves a screen standing instead of a blank document.
+ * 4. `RouterProvider`, which mounts the layout route and everything
  *    below it.
  *
  * ## Why the cache sits ABOVE the router
@@ -27,6 +30,41 @@
  * That is invisible against the fixture accessors, which resolve on a
  * microtask, and it is the whole point once the API swap re-points
  * them at HTTP.
+ *
+ * ## Why the boundary sits BETWEEN the cache and the router
+ *
+ * `AppErrorBoundary` is nested at exactly one depth, and both of its
+ * neighbours are chosen rather than incidental.
+ *
+ * BELOW the cache, because a reset must not discard it. The
+ * boundary's `reset` clears its own caught state and nothing else, so
+ * everything ABOVE it survives the retry — and the query client is
+ * the one thing in this tree with a tab's worth of read state in it.
+ * Nested the other way, the provider would sit inside the subtree the
+ * boundary swaps out and back, and every "try again" would remount it
+ * with an empty cache: the retry would be indistinguishable from the
+ * reload button beside it, and the primary control on `CrashFallback`
+ * would be the expensive one. Below the cache, "try again" re-renders
+ * the failing surface against everything the tab has already read.
+ *
+ * ABOVE the router, and it is NOT what catches a surface. A data
+ * router catches a render error from any route element itself and
+ * draws the nearest route `ErrorBoundary`, so a throw from a surface,
+ * a modal sub-route or the layout chrome never travels this far —
+ * measured: before the route tree declared one, the dev-only crash
+ * route drew react-router's default error screen and this boundary
+ * saw nothing. `../app-shell/RouteErrorBoundary.tsx`, declared on
+ * every top-level route in `./routes/router.tsx`, is what covers the
+ * route tree. This boundary covers what is left: a throw from the
+ * router component itself or from anything between it and the cache.
+ * Both draw the same `CrashFallback` and publish the same signal.
+ *
+ * It sits BELOW `StrictMode` for the same reason everything else
+ * does: `StrictMode` is not a runtime provider and catches nothing.
+ * Note that its development double-invocation re-throws a caught
+ * error to `window` as well — see `../app-shell/AppErrorBoundary.tsx`
+ * — so a healthy fallback still prints an uncaught error on the
+ * development console.
  *
  * ## Why the router is built here
  *
@@ -111,11 +149,15 @@
  * split.
  */
 
+import type { ReactNode } from 'react';
+
 import { QueryProvider } from '@ar/ui/cache';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 
+import { AppErrorBoundary } from './app-shell/AppErrorBoundary';
+import { CrashFallback } from './app-shell/CrashFallback';
 import { createAppRouter } from './routes/router';
 
 import './styles.css';
@@ -135,10 +177,29 @@ if (rootElement == null) {
 
 const router = createAppRouter();
 
+/**
+ * Draw the crash screen for whatever the boundary caught.
+ *
+ * Module scope so the prop is one stable value: `AppErrorBoundary`
+ * takes a FUNCTION rather than an element because only the boundary
+ * knows the thrown value and how to put the children back, and this
+ * adapter is the whole of what that costs here.
+ *
+ * @param error - Whatever was thrown, unreduced.
+ * @param reset - The boundary's retry, bound to the primary control.
+ * @returns The fallback screen.
+ */
+const renderCrashFallback = (
+  error: unknown,
+  reset: () => void,
+): ReactNode => <CrashFallback error={error} reset={reset} />;
+
 createRoot(rootElement).render(
   <StrictMode>
     <QueryProvider>
-      <RouterProvider router={router} />
+      <AppErrorBoundary fallback={renderCrashFallback}>
+        <RouterProvider router={router} />
+      </AppErrorBoundary>
     </QueryProvider>
   </StrictMode>,
 );

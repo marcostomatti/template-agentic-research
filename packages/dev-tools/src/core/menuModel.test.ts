@@ -67,6 +67,7 @@ function createHost(): DevToolsHost {
       subscribe: () => () => {},
       publish: () => {},
       last: () => undefined,
+      recent: () => [],
     },
     fetch: () => Promise.reject(new Error('the menu model never fetches')),
   };

@@ -79,6 +79,7 @@ function createHost(options: HostOptions = {}): DevToolsHost {
       subscribe: () => () => {},
       publish: () => {},
       last: () => undefined,
+      recent: () => [],
     },
     fetch: (path: string, init?: RequestInit) => {
       options.calls?.push({ path, init });

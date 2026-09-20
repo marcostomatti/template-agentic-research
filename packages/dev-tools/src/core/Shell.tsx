@@ -90,6 +90,49 @@
  * `./surfaces/ActionItem.tsx` is `aria-hidden`, so a rejection that
  * did not reach this region would reach nobody.
  *
+ * ## The bus's `open-item` is the one thing this component listens to
+ *
+ * It is also the only way into the widget that does not start with a
+ * pointer or a key: the app publishes a feature id and an item id,
+ * `./openItem.ts` turns the pair into that feature's own
+ * {@link MenuItem} or into `null`, and the answer is acted on here.
+ * The item goes through `chooseItem` — the SAME callback `./Menu.tsx`
+ * answers upward with — and a `null` writes
+ * {@link DEVTOOLS_NOTHING_TO_OPEN} into the live region above.
+ *
+ * Going through `chooseItem` rather than writing the slots again is
+ * what makes "exactly as a menu click would" true of all four modes
+ * at once: an action runs, a popover takes the non-blocking slot, and
+ * a modal and a drawer take the one exclusive slot, invariant
+ * included. A second set of branches would be a second thing to keep
+ * in step with the first.
+ *
+ * What a publish deliberately does NOT do is dismiss an open menu. A
+ * click dismisses it through `./Menu.tsx`'s own `dismiss`, which
+ * FIRST returns focus to the trigger; that function is unreachable
+ * from out here, and closing the menu by writing `menuOpen` would
+ * unmount the rows with a keyboard operator's focus on one of them
+ * and drop it to the document body. Nothing in the menu was
+ * activated, so nothing in the menu is finished with.
+ *
+ * `./bus.ts`'s `subscribe` ANSWERS its disposer and the effect
+ * returns it, so unsubscribing on dispose is the cleanup and there is
+ * nothing between the two to get wrong. That disposer is idempotent,
+ * which is what makes StrictMode's double-invoked effect harmless. The effect re-syncs whenever the host or the feature
+ * array changes — a corner move rebuilds the host — and that is an
+ * unsubscribe and a subscribe inside one commit rather than a window:
+ * delivery is synchronous, so there is no moment between them in
+ * which a publish could be made and missed.
+ *
+ * A resolved item does NOT clear the region, and a live region speaks
+ * on change, so a second unresolvable publish in a row says nothing —
+ * the text it would write is the text already there (measured;
+ * reading 5d below shows the stale line under an opened drawer). That
+ * is stated rather than worked around: the fix is a value that
+ * toggles, which reads the same sentence twice to an operator who is
+ * not the one who published, and the publisher's author has a
+ * console.
+ *
  * ## About is the shell's own surface
  *
  * `./menuModel.ts` gives About a `kind: 'fixed'` node with no
@@ -172,6 +215,76 @@
  *   whole of the mechanical control behind "the one nullable slot IS
  *   the one-drawer-at-a-time invariant" above.
  *
+ * The `open-item` subscription was added to the SAME probe rather than
+ * to a second one, so this component keeps ONE static-render reading.
+ * What the static half can say about the announcement is a refusal,
+ * and it is worth saying — a served frame must not carry a sentence
+ * nobody has made:
+ *
+ * - Reading 4: a payload published on `open-item` BEFORE
+ *   `renderToStaticMarkup`, and a second one after it, leave the
+ *   static frame's region exactly as reading 2 found it — `<p
+ *   class="devtools-status" role="status"></p>`, text `""`, the markup
+ *   not mentioning `Nothing to open` anywhere. The counting control
+ *   beside it: the feature's `items` was called once, by the menu
+ *   model's own read during that render, and NEITHER publish moved
+ *   that count. No effect runs under `react-dom/server`, so nothing
+ *   subscribed and the resolver was never reached.
+ *
+ * The announcement itself needs the effect, so the probe mounts the
+ * same component a second time over `jsdom` + `react-dom/client`
+ * through `act` — state and text, not paint; paint is the forced
+ * Playwright spec's. `host.bus` is the `devtoolsBus` singleton here,
+ * because this file builds the host without a `bus` member:
+ *
+ * - Reading 5a: mounted, region text `""`, no `.devtools-drawer`.
+ * - Reading 5b: publishing `{featureId: 'probe-feature', itemId:
+ *   'no-such-item'}` leaves the drawer absent and the region reading
+ *   `Nothing to open`, and the feature's `items` call count MOVED —
+ *   the resolver was reached and answered `null`.
+ * - Reading 5c: an unknown feature id answers the same region text
+ *   with nothing open.
+ * - Reading 5d: publishing the drawer item's real id opens it —
+ *   `.devtools-drawer` with `aria-label="Probe drawer"`, no `<dialog>`
+ *   beside it — while the region still reads the previous `Nothing to
+ *   open`. That stale line is the "does not clear" paragraph above,
+ *   read rather than asserted.
+ * - Reading 5e: publishing the MODAL item's id next leaves no
+ *   `.devtools-drawer` and an open `<dialog aria-label="Probe
+ *   modal">`, and moved the `items` count by exactly 1. The one
+ *   exclusive slot behaves through the bus as it does through a click,
+ *   which is the whole claim of routing both through `chooseItem`.
+ * - Reading 5f: after `root.unmount()`, the container's markup is `""`
+ *   and a further publish moves the `items` count by 0 — the effect
+ *   cleanup ran the bus's disposer — and nothing threw out of
+ *   `publish`.
+ * - Reading 6: a SECOND root, so the region starts empty again, takes
+ *   a string cast onto the typed topic — what a publisher the compiler
+ *   never saw can put on the bus. The region reads `Nothing to open`,
+ *   nothing opens, and the `items` count moves by 0: the shape guard
+ *   answers before the roster is searched.
+ *
+ * Two controls, each breaking THIS file, re-running the probe and
+ * restoring it byte-identical (`diff` confirmed, both):
+ *
+ * - Dropping the `useEffect` below entirely (leaving `openPublished`
+ *   built and unused) reads `""` at 5b, 5d and 6b, with nothing opened
+ *   and the `items` count unmoved at 5b. Every announcement reading
+ *   above is therefore a reading of the subscription rather than of a
+ *   region that says that anyway.
+ * - Keeping the subscription but DISCARDING its disposer — a braced
+ *   effect body returning `undefined` — moves 5f's count from 0 to 1:
+ *   the unmounted shell's subscriber is still on the bus and still
+ *   resolves. 6b stays `Nothing to open` under it, so 5f is the one
+ *   reading that separates a leaked subscription from a cleaned one.
+ *
+ * One reading came out unasked-for: a `react-dom/client` warning,
+ * `An update to DevToolsDrawer inside a test was not wrapped in
+ * act(...)`, is printed between readings 5c and 5d — as the drawer
+ * opens. It is `./surfaces/Drawer.tsx`'s deliberate microtask-deferred
+ * `setSeen` landing after the `act` scope that opened it, not anything
+ * this file does.
+ *
  * ## What proves what
  *
  * Nothing in this file is proved by a unit case: the jsdom vitest
@@ -191,10 +304,16 @@ import type {
   DevToolsVersion,
 } from './shellRules';
 import type { DevToolsActionMenuItem } from './surfaces/ActionItem';
-import type { Corner, DevToolsConfig, DevToolsStatus, MenuItem } from './types';
+import type {
+  Corner,
+  DevToolsConfig,
+  DevToolsOpenItemPayload,
+  DevToolsStatus,
+  MenuItem,
+} from './types';
 import type { ReactElement } from 'react';
 
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { DEVTOOLS_DEFAULT_CORNER, buildDevToolsHost } from './host';
 import { DevToolsMenu } from './Menu';
@@ -203,10 +322,12 @@ import {
   DEVTOOLS_SAVE_SETTINGS_ID,
   buildMenuModel,
 } from './menuModel';
+import { resolveOpenItem } from './openItem';
 import { readSettings } from './settings';
 import {
   DEVTOOLS_ABOUT_DETAILS_LABEL,
   DEVTOOLS_ABOUT_LABEL,
+  DEVTOOLS_NOTHING_TO_OPEN,
   DEVTOOLS_SAVE_SETTINGS_DEFERRED,
   buildAboutDetails,
   collectDrawerItems,
@@ -400,6 +521,27 @@ export function DevToolsShell({
       ? { itemId, mode: 'drawer' }
       : null);
   }, []);
+
+  const openPublished = useCallback((payload: DevToolsOpenItemPayload) => {
+    const item = resolveOpenItem(config.features, host, payload);
+
+    if (item === null) {
+      // The ONE thing said about any of the resolver's four refusals.
+      setAnnouncement(DEVTOOLS_NOTHING_TO_OPEN);
+      return;
+    }
+
+    // The same call the menu makes, so a published open and a clicked
+    // row cannot drift apart -- see this module's header.
+    chooseItem(item);
+  }, [chooseItem, config.features, host]);
+
+  // `subscribe` ANSWERS its disposer, so the effect's cleanup is the
+  // unsubscribe with nothing in between to get wrong.
+  useEffect(
+    () => host.bus.subscribe('open-item', openPublished),
+    [host.bus, openPublished],
+  );
 
   const drawers = collectDrawerItems(nodes);
   const modalItem = openSurface?.mode === 'modal'

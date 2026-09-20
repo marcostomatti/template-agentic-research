@@ -94,6 +94,30 @@
  * none — and `../components/PlaceholderModal.tsx` is still the file
  * four modals cite for the relative-close reading.
  *
+ * ## The dev-only crash route
+ *
+ * One more child sits below both bases, and only in a DEV build:
+ * `../dev/crashRoute.tsx`'s `/__devtools/crash`, which throws on
+ * render so `../app-shell/AppErrorBoundary.tsx` has something to
+ * catch. Nothing else in this app fails on demand.
+ *
+ * The import is STATIC where every other reach into `src/dev/` is a
+ * dynamic one behind `import.meta.env.DEV`, because a route cannot
+ * arrive on a later microtask: `../main.tsx` builds the router at
+ * module scope, and the tree {@link createAppRouter} reads is fixed
+ * before the first paint. The guard therefore sits at the USE, in
+ * {@link routesBelowBase}, rather than at the import. That module
+ * imports one TYPE and nothing else, so the static edge reaches no
+ * runtime code and certainly not `@ar/dev-tools`.
+ *
+ * Whether the branch is dropped from a production bundle is the
+ * bundler's decision rather than this file's — `import.meta.env.DEV`
+ * is replaced with a literal `false` at build time and the ternary
+ * folds — so the task that added it MEASURED the drop instead of
+ * asserting it: `dist/` grepped for `__devtools/crash` against the
+ * planted `Agentic Research` control, both counts recorded in the
+ * plan's close-out notes.
+ *
  * ## The catch-all
  *
  * A CHILD of each layout route rather than a sibling, so an unmatched
@@ -137,10 +161,12 @@ import { EmptyState } from '@ar/ui';
 import { Navigate, createBrowserRouter } from 'react-router';
 
 import { AppLayout } from '../app-shell/AppLayout';
+import { RouteErrorBoundary } from '../app-shell/RouteErrorBoundary';
 import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
 import { authMode } from '../data/auth';
+import { devRoutes } from '../dev/crashRoute';
 import { findPage } from '../pages';
 import { AgentEditorModal } from '../pages/agents/AgentEditorModal';
 import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
@@ -514,6 +540,15 @@ const surfaceRoute = (surface: Surface): RouteObject => {
  * the table widened: a surface's second sub-route is a table row, and
  * nothing about building a base changed to accept it.
  *
+ * `devRoutes()` is called for the same reason rather than spread from
+ * a constant: it answers fresh route objects too, so the crash route
+ * under one base is not the object under the other. The DEV read is
+ * optional-chained for `../data/api.ts`'s measured reason —
+ * `import.meta.env` is undefined in the Playwright node process,
+ * where a bare member read throws at import — and Vite replaces the
+ * read through the chain, so a production build folds the ternary to
+ * the empty arm and drops the import with it.
+ *
  * @returns The child routes of a layout route, in declaration order.
  */
 const routesBelowBase = (): RouteObject[] => [
@@ -522,6 +557,9 @@ const routesBelowBase = (): RouteObject[] => [
     element: <Navigate to={getSurface(INDEX_SURFACE_ID).segment} replace />,
   },
   ...SURFACES.map(surfaceRoute),
+  ...(import.meta.env?.DEV === true
+    ? devRoutes()
+    : []),
   {
     path: CATCH_ALL_PATTERN,
     element: NOT_FOUND,
@@ -589,17 +627,26 @@ export const createRoutes = (options: RouteTreeOptions): RouteObject[] => {
     {
       path: SINGLE_DOMAIN_BASE,
       element: gated(SHELL),
+      ErrorBoundary: RouteErrorBoundary,
       children: routesBelowBase(),
     },
     {
       path: DOMAIN_BASE_PATTERN,
       element: gated(<DomainGuard>{SHELL}</DomainGuard>),
+      ErrorBoundary: RouteErrorBoundary,
       children: routesBelowBase(),
     },
   ];
 
   return auth
-    ? [{ path: LOGIN_PATH, element: LOGIN_PAGE }, ...bases]
+    ? [
+      {
+        path: LOGIN_PATH,
+        element: LOGIN_PAGE,
+        ErrorBoundary: RouteErrorBoundary,
+      },
+      ...bases,
+    ]
     : bases;
 };
 

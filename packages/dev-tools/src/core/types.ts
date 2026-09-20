@@ -89,6 +89,33 @@
  *   not the narrowing function, are what make the flat spelling
  *   unreachable.
  *
+ * The bus half of this module was measured the same way, and its
+ * directives live in the same file:
+ *
+ * - Widening `'open-item'` in {@link DevToolsBusPayloads} to `unknown`
+ *   — the shape the other three topics have — answers exactly three
+ *   `TS2578: Unused '@ts-expect-error' directive.` at
+ *   `types.test.ts(270,5)`, `(273,5)` and `(279,7)`, and nothing else.
+ *   Those three are the payload's whole refusal: a bare string, half
+ *   a pair, and a pair carrying a third member. The fourth directive
+ *   in that case — the one on a topic outside the roster — stays
+ *   NEEDED through this mutation, which is what keeps the two claims
+ *   separable.
+ * - Deleting the `'open-item'` member outright answers thirteen
+ *   errors and no `TS2578` beyond `(279,7)`: `TS2322` on all three
+ *   annotated rosters — `types.test.ts(95,3)`, `bus.test.ts(23,3)`
+ *   and `bus.ts(212,3)`, each `Type '"open-item"' is not assignable
+ *   to type 'keyof DevToolsBusPayloads'` — and `TS2345` at every
+ *   publish and subscribe naming the topic. Those `TS2322`s are the
+ *   point:
+ *   the map is the roster, so the runtime's `TOPICS` and this file's
+ *   sweep cannot drift from it in the direction that REMOVES a topic.
+ *   Adding a topic to `TOPICS` the map does not declare reds the same
+ *   way, measured: a `'nope'` member answers one `TS2322` at
+ *   `bus.ts(213,3)`. The other direction — a topic the map declares
+ *   and `TOPICS` omits — reds NOTHING here, and `bus.test.ts` is
+ *   where it is caught; its mutation note records the two cases.
+ *
  * The suite and `check-types` do not report each other's direction,
  * and the false negative runs one way only: `bun x vitest run
  * src/core/types.test.ts` answers `Test Files 1 passed (1)` and
@@ -140,13 +167,79 @@ export type Corner = 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
 export type Size = 'sm' | 'md' | 'lg';
 
 /**
- * The three topics the app may tell the widget things on.
+ * What an `open-item` publish carries.
  *
- * Closed at three by the spec: `error` for a caught or global failure,
- * `route` for a navigation, `artefact` for whatever entity the current
- * surface is about.
+ * Two ids and nothing else: WHICH feature, and which of that
+ * feature's items. Not a {@link MenuItem} and not a callback, because
+ * the publisher is the app — outside the widget, holding neither the
+ * feature array nor the host — and an id pair is the whole of what it
+ * can honestly say. Turning the pair into an item is the shell's job,
+ * and it may answer that there is none.
+ *
+ * Both members are plain `string` rather than a literal union for the
+ * same reason: the ids belong to whatever features are plugged in this
+ * build, which this module cannot enumerate. So a WELL-TYPED payload
+ * naming a feature that is not mounted is an ordinary runtime case
+ * rather than a compiler one, and the resolver answers `null` for it.
  */
-export type DevToolsBusTopic = 'error' | 'route' | 'artefact';
+export interface DevToolsOpenItemPayload {
+  /** {@link DevToolsFeature.id} of the feature holding the item. */
+  readonly featureId: string;
+
+  /** {@link MenuItem.id}, within that feature's own items. */
+  readonly itemId: string;
+}
+
+/**
+ * Every topic, and what each one carries.
+ *
+ * The map is the topic roster: {@link DevToolsBusTopic} is its
+ * `keyof`, so a topic exists exactly when its payload is declared and
+ * neither half can be grown without the other. `./bus.ts`'s `TOPICS`
+ * is the runtime's copy of the same roster and must list the same
+ * members.
+ *
+ * Three of the four carry `unknown`, and that is the honest reading
+ * rather than a gap. `error`, `route` and `artefact` are announcements
+ * the APP makes about itself: their shapes are settled by whatever
+ * producer the host app attaches, the widget only ever summarises
+ * them, and a shape invented here would be a contract nothing
+ * publishes against. `open-item` is the one topic the widget itself
+ * consumes and acts on, so it is the one topic that can be — and is —
+ * typed.
+ *
+ * `unknown` is also what keeps the three loose in PRACTICE: because
+ * `unknown` accepts every value, a `publish('error', x)` compiles for
+ * every `x` exactly as it did before the map existed, and only
+ * `open-item` gained a refusal.
+ */
+export interface DevToolsBusPayloads {
+  /** A caught or global failure. Shape settled by the producer. */
+  readonly error: unknown;
+
+  /** A navigation. Shape settled by the producer. */
+  readonly route: unknown;
+
+  /** Whatever entity the current surface is about. */
+  readonly artefact: unknown;
+
+  /** Open one feature's item, as a menu click would. */
+  readonly 'open-item': DevToolsOpenItemPayload;
+}
+
+/**
+ * The four topics the app may tell the widget things on.
+ *
+ * Closed at four by the spec: `error` for a caught or global failure,
+ * `route` for a navigation, `artefact` for whatever entity the current
+ * surface is about, and `open-item` for "open this feature's item",
+ * which is the one direction that flows back INTO the widget.
+ *
+ * Derived from {@link DevToolsBusPayloads} rather than written as a
+ * second literal union, so a topic can never exist with no declared
+ * payload nor a payload with no topic.
+ */
+export type DevToolsBusTopic = keyof DevToolsBusPayloads;
 
 /**
  * The pub/sub a feature reaches through {@link DevToolsHost.bus}.
@@ -158,39 +251,94 @@ export type DevToolsBusTopic = 'error' | 'route' | 'artefact';
  * `createDevToolsBus()` factory and the module-level `devtoolsBus`
  * singleton.
  *
- * The payloads are `unknown` on purpose, and the looseness is the
- * honest reading rather than a shortcut. The topic set is what this
- * plan fixes; no producer exists in it at all, and the shapes the
- * three topics carry are settled by the plan that adds the producers.
- * Typing them here would be inventing a contract nothing publishes
- * against, and a wrong guess is worse than an `unknown` a consumer
- * must narrow at the edge.
+ * Every member is generic in its topic and reads that topic's payload
+ * out of {@link DevToolsBusPayloads}, so what a call may carry is the
+ * map's answer rather than a second declaration here. For `error`,
+ * `route` and `artefact` the map answers `unknown` and every one of
+ * these signatures means exactly what it meant before the map
+ * existed; for `open-item` it answers
+ * {@link DevToolsOpenItemPayload}, and a publish of anything else
+ * does not compile.
+ *
+ * A typed payload is a claim about the CALLER, not a guarantee about
+ * the value: this bus is reached from app code the compiler may never
+ * have seen, so a consumer that acts on an `open-item` payload still
+ * checks its shape — `./openItem.ts` is where that check lives.
  */
 export interface DevToolsBus {
   /**
    * Listen to a topic.
    *
-   * @param topic - One of the three topics.
+   * @typeParam Topic - Inferred from {@link topic}; picks the payload.
+   * @param topic - One of the four topics.
    * @param fn - Called with each published payload.
    * @returns A disposer; calling it more than once is harmless.
    */
-  subscribe(topic: DevToolsBusTopic, fn: (payload: unknown) => void): () => void;
+  subscribe<Topic extends DevToolsBusTopic>(
+    topic: Topic,
+    fn: (payload: DevToolsBusPayloads[Topic]) => void,
+  ): () => void;
 
   /**
    * Announce something on a topic.
    *
-   * @param topic - One of the three topics.
-   * @param payload - Whatever the producer publishes.
+   * @typeParam Topic - Inferred from {@link topic}; picks the payload.
+   * @param topic - One of the four topics.
+   * @param payload - Whatever that topic carries: anything at all on
+   * the three `unknown` ones, and a
+   * {@link DevToolsOpenItemPayload} on `open-item`.
    */
-  publish(topic: DevToolsBusTopic, payload: unknown): void;
+  publish<Topic extends DevToolsBusTopic>(
+    topic: Topic,
+    payload: DevToolsBusPayloads[Topic],
+  ): void;
 
   /**
    * The most recent payload published on a topic.
    *
-   * @param topic - One of the three topics.
+   * @typeParam Topic - Inferred from {@link topic}; picks the payload.
+   * @param topic - One of the four topics.
    * @returns The last payload, or `undefined` before any publish.
    */
-  last(topic: DevToolsBusTopic): unknown;
+  last<Topic extends DevToolsBusTopic>(
+    topic: Topic,
+  ): DevToolsBusPayloads[Topic] | undefined;
+
+  /**
+   * The payloads recently published on a topic, most recent FIRST.
+   *
+   * {@link last} answers one payload and this answers a window over
+   * the same stream, so `recent(topic, 1)[0]` and `last(topic)` are
+   * the same value wherever anything has been published. Both exist
+   * because a reader wanting the current state wants the first and a
+   * reader wanting what LED here — an error report carrying the last
+   * few failures rather than only the newest — wants the second, and
+   * spelling the second as repeated `last` reads is impossible: a
+   * payload `last` has already been replaced by is gone.
+   *
+   * The bus keeps at most 20 payloads per topic. That number is the
+   * bus's, not the caller's: a request for more than were kept
+   * answers what there is, and never pads. So the answer's length is
+   * `min(n, published, 20)` and a caller reads the array's own
+   * length rather than assuming it got what it asked for.
+   *
+   * Every answer is a fresh array. A caller may sort or splice it
+   * without reaching the bus's own state, and holding one does not
+   * make it grow as later payloads arrive — read again for those.
+   *
+   * @typeParam Topic - Inferred from {@link topic}; picks the payload.
+   * @param topic - One of the four topics.
+   * @param n - How many to answer, at most. Zero and every negative
+   * answer an empty array, which is the same answer an untouched
+   * topic gives: "nothing to show" is not an error here and a caller
+   * never has to guard the call.
+   * @returns Up to `n` payloads, newest first; empty before any
+   * publish.
+   */
+  recent<Topic extends DevToolsBusTopic>(
+    topic: Topic,
+    n: number,
+  ): readonly DevToolsBusPayloads[Topic][];
 }
 
 /**
@@ -407,7 +555,7 @@ export interface DevToolsHost {
    */
   readonly settings: { size: Size; corner: Corner };
 
-  /** The pub/sub. No producer exists in this plan. */
+  /** The pub/sub. Window captures reach `error`; the app settles the rest. */
   readonly bus: DevToolsBus;
 
   /**

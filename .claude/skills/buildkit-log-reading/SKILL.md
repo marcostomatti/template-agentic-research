@@ -1,9 +1,9 @@
 ---
 name: buildkit-log-reading
-description: "Use when reading a multi-stage `docker build` log — a COPY step that appears once for several stages, or a step that neither completes nor errors."
-prevents: "a step read as missing from a stage that in fact ran, and a cancelled step misdiagnosed as the failure"
+description: "Use when reading a multi-stage `docker build` log — a COPY step that appears once for several stages, a step that neither completes nor errors, or a line carrying the word `error` in a step that succeeded."
+prevents: "a step read as missing from a stage that in fact ran, a cancelled step misdiagnosed as the failure, and a step's own diagnostic string read as a build failure"
 signal: silent
-when_to_use: "You are reading a docker build / buildx log over a multi-stage Dockerfile and trying to confirm a specific stage ran a specific instruction. Prevents: a step read as missing from a stage that in fact ran, and a cancelled step misdiagnosed as the failure"
+when_to_use: "You are reading a docker build / buildx log over a multi-stage Dockerfile and trying to confirm a specific stage ran a specific instruction. Prevents: a step read as missing from a stage that in fact ran, a cancelled step misdiagnosed as the failure, and a step's own diagnostic string read as a build failure"
 tags:
   - docker
   - buildkit
@@ -14,9 +14,9 @@ stack:
 
 # buildkit-log-reading — what a BuildKit log does not print
 
-Two behaviours make a BuildKit log a poor match for "show me stage X
-running instruction Y". Both are the builder working as designed, and
-both read as a missing or broken step.
+Three behaviours make a BuildKit log a poor match for "show me stage X
+running instruction Y". All are the builder working as designed, and
+each reads as a missing, hung or broken step.
 
 ## Identical steps across sibling stages are printed ONCE
 
@@ -38,6 +38,14 @@ the positive reading from a later step that could only succeed if the
 copy landed (an install that accepts a frozen lockfile, say) rather
 than from counting COPY lines.
 
+This caveat does NOT fire on a single-target build (`docker build
+--target web` alone). BuildKit merges an instruction into one node
+only when two DIFFERENT stages in the SAME invocation share it, and
+building one target in isolation presents no sibling to merge with —
+so every step prints once under the one stage label, and the shape
+that looks like collapsing is just the log having a single label.
+Do not carry a collapsed-step explanation over to a `--target` log.
+
 ## An unrelated step that just stops was CANCELED, not hung
 
 On the first failure anywhere in the graph, `docker build` tears the
@@ -52,3 +60,23 @@ error. The tell is a `CANCELED` marker on the step:
 Read the FAILING step for the cause, never the cancelled one. A
 cancelled `RUN bun install` says nothing about whether that install
 would have succeeded.
+
+## The word `error` in a step's output is not a failed step
+
+A `RUN` step's stdout and stderr are printed verbatim, so a script
+that PRINTS the word as part of its own conditional logic is
+indistinguishable, on a naive `grep -i error`, from a step that
+actually failed. A guard shaped like
+
+```sh
+grep -q 'ioredis' "$bundle" && { echo 'ERROR: ioredis leaked'; exit 1; } || exit 0
+```
+
+prints its own `ERROR:` string as the shell parses and runs it, and
+the step then closes `DONE` because the `exit 0` branch is the one
+that fired.
+
+The verdict is the enclosing step's own terminator, not a match
+inside it: find the step number the line sits under and read whether
+that `#N` closed `DONE`, `ERROR` or `CANCELED`. Grep for `^#[0-9]*
+ERROR` or for the build's final status line; never for the bare word.
