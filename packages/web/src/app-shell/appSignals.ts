@@ -53,11 +53,12 @@
  * Every module named above — the boundary, the fallback,
  * `useArtefactSignal`, the layout effect and the bridge — lands in a
  * later stage of the same plan as this file, and none of them exists
- * at the commit that adds it. Two have since landed beside this file:
- * `useArtefactSignal.ts` and `CrashFallback.tsx`. Neither is a
- * producer yet — none of the seven modal sub-routes calls the hook,
- * and nothing renders the fallback until `src/main.tsx` hands it to
- * the boundary. So {@link AppSignals.last} answers `undefined` on all
+ * at the commit that adds it. Three have since landed beside this
+ * file: `useArtefactSignal.ts`, `CrashFallback.tsx` and
+ * `AppErrorBoundary.tsx`. None of the three is a producer yet — none
+ * of the seven modal sub-routes calls the hook, and nothing renders
+ * the fallback or mounts the boundary until `src/main.tsx` wraps the
+ * router in it. So {@link AppSignals.last} answers `undefined` on all
  * five topics for the whole life of the app until the callers
  * arrive, and the only thing that publishes here when anything runs
  * is `appSignals.test.ts`. That is the normal case rather than a gap:
