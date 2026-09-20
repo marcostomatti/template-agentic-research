@@ -82,6 +82,158 @@ gitignored either way — the repo-root `.gitignore`'s `.rafa/` pattern
 is unanchored and matches the nested directory as well — so nothing
 tracked is at risk; it is only where to look for a report by hand.
 
+## Feedback Feature
+
+The feedback drawer is a plugged-in feature that lets users file bug
+reports or UI feedback from inside the running app. It presents a form
+built from the repository's GitHub issue templates (read from
+`.github/ISSUE_TEMPLATE/*.yml` or the paths `templates` names), adds
+three fields of its own, captures a screenshot and element selector on
+request, and files the report through `rafa` to the tracker.
+
+### Issue Form Templates and `x-devtools` Contract
+
+GitHub issue forms drive the feedback form. Each issue form becomes a
+`ReportTemplate`: a title, description, module, and a list of fields.
+The plugin reads `.yml` files on every `GET /__devtools/templates`
+request, so edits are picked up without restarting; a missing or
+malformed file is skipped with a warning and nothing fatal.
+
+A template opts out of the widget's own fields through a top-level
+`x-devtools` key GitHub ignores:
+
+```yaml
+x-devtools:
+  screenshot: false  # hide the screenshot field
+  selector: false    # hide the element-selector field
+  context: always    # cannot be opted out of; ignored if present
+```
+
+The three appended fields are:
+- `screenshot` (`file`): capture via `navigator.mediaDevices.
+  getDisplayMedia({preferCurrentTab: true})`, or drag/paste a PNG or
+  JPEG. Cancelled dialogs or missing APIs answer `null` and the report
+  goes without. Stored under `.rafa/feedback/<round>/` on the server.
+- `selector` (`selector`): click to pick an element on the page; the
+  widget calls `@medv/finder` configured to prefer `data-testid`,
+  `id`, `role` and `aria-label` over Tailwind classes. While focused,
+  live matches are outlined and the match count shown; ArrowUp climbs to
+  parent, ArrowDown returns.
+- `context` (`readonly`): automatically collected: viewport, device
+  pixel ratio, colour scheme, `data-theme` if present, user agent,
+  `location.href`, app version, and the bus's last `error` and
+  `artefact` when present. Never opted out.
+
+### Form Renderer Slot
+
+The package ships a plain HTML renderer for the form, but `mountDevTools`
+accepts `renderForm?(fields, value, onChange)` to customize it. The
+renderer receives `ReportField[]` (the seven kinds: `text`, `textarea`,
+`select`, `checkboxes`, `readonly`, `file`, `selector`) and owns all
+drawing; both the default and a custom renderer mark the selector input
+`data-devtools-field="selector"` so the element-picker decoration can
+attach correctly.
+
+### Endpoints: Templates, Report, and Comment
+
+Three routes handle the feature:
+
+**`GET /__devtools/templates`**: Returns an array of `ReportTemplate`
+objects, parsed from `.yml` files and validated against a zod schema
+that both halves of this package share. A missing directory answers
+`[]`; an unreadable or malformed file is skipped with a dev-server
+log warning.
+
+**`POST /__devtools/report`**: Stores a filed report to disk and
+dispatches it to a gateway if configured. The request carries a
+title, body (both validated for length), a context object, and
+attachments (base64-encoded PNG/JPEG). The response answers `{status,
+path, gateway}` where `gateway` is whatever the configured gateway
+returned (or `none` if unconfigured). The PNG is stored under
+`.rafa/feedback/<round>/` and the path links it in the issue body.
+The PNG never travels to the tracker — only its path does.
+
+**`POST /__devtools/comment`**: The "also affected" route. When a
+search finds a duplicate, this posts a comment linking the new report.
+The request carries an `issueId` (passed to the gateway's `comment`
+method and never altered) and a body. The response answers `{status:
+'commented', gateway: {...}}`. A dev server with no gateway answers
+`gateway-absent`, since there is nowhere for a comment to go.
+
+### Refusals
+
+| Rule | Code | When |
+| --- | --- | --- |
+| `remote-not-loopback` | 403 | Non-loopback address without `allowLan` |
+| `origin-mismatch` | 403 | Cross-origin `POST` on request `Origin` header |
+| `host-mismatch` | 403 | Cross-origin `POST` on request `Host` header |
+| `method-not-allowed` | 405 | Wrong method: `GET` to `/report` or `/comment` |
+| `body-too-large` | 413 | Over 24 MiB |
+| `body-unreadable` | 400 | Stream read error |
+| `body-not-json` | 400 | JSON parse failed |
+| `slug-unusable` | 400 | Title sanitises to empty |
+| `attachment-name-unusable` | 400 | Attachment name empty |
+| `gateway-absent` | 500 | `POST /comment` with no gateway configured |
+| `round-unusable` | 500 | Round is empty |
+| `clock-unusable` | 500 | Timestamp failed |
+| `write-failed` | 500 | Filesystem I/O error |
+| `socket-unreadable` | 403 | Cannot read local port |
+| `endpoint-failed` | 500 | Unhandled middleware exception |
+
+The endpoint checks `remote-not-loopback` on every request (both `GET`
+and `POST`), before checking origin; so a non-loopback caller is
+refused the same code whatever `Origin` it sends, and there is no way
+to observe an origin-based refusal from a LAN address.
+
+### `rafaGateway`: Filing Through `rafa`
+
+The one built-in gateway runs the `rafa` binary to file reports and
+dedupe against existing issues. It is imported dynamically and bound
+through the `gateway` plugin option:
+
+```typescript
+import { rafaGateway } from '@ar/dev-tools/vite'
+
+export default defineConfig({
+  plugins: [
+    devtoolsPlugin({
+      gateway: rafaGateway({
+        bin: 'rafa',  // optional; default is 'rafa'
+      }),
+    }),
+  ],
+})
+```
+
+The gateway decides the exact argv for every call to `rafa` (never a
+shell string; every flag is one argv element in `--flag=value` form):
+
+```text
+rafa issue list   --type=bug --search=<words> --output=json
+rafa issue create --title=[fb/<round>] <title> --body=<body>
+                  --type=bug --module=web --output=json
+rafa issue comment <id> --body=<markdown> --output=json
+```
+
+The `[fb/<round>]` title prefix and attachment paths are applied
+server-side (the browser has no authority over the round and the paths
+do not exist until the report is stored). The attachment BYTES never
+leave the machine; only their paths are appended to the issue body.
+
+### Local Tracker Path
+
+When the tracker has no GitHub authentication, rafa falls back to the
+`local` tracker and stores issues in the repo. The widget detects this
+and shows a prefilled GitHub new-issue link so a triager can copy the
+content to hand:
+
+```
+/issues/new?template=<file>&title=[fb/<round>] <title>&body=<body>
+```
+
+The repo slug is read from `git remote get-url origin` and served by
+`GET /__devtools/status`.
+
 ## Endpoints
 
 ### `GET /__devtools/status`
