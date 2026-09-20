@@ -8,6 +8,27 @@ const DEFAULT_API_PORT = 3000;
 const DEFAULT_BASE_PATH = '/';
 
 /**
+ * The issue forms the feedback drawer serves, as paths relative to THIS
+ * package — `devtoolsPlugin`'s own `templates` option reads a relative
+ * path against the cwd of the process running the dev server, which is
+ * `packages/web` and never the repo root.
+ *
+ * Left unstated, the plugin falls back to its own default —
+ * `.github/ISSUE_TEMPLATE` resolved against that same cwd — which
+ * exists nowhere under this package. Measured against a plain
+ * `bun x vite`: `GET /__devtools/templates` answered `[]`, so the
+ * report-type select drew disabled and the drawer no form at all. The
+ * two paths below are the repo's actual issue forms, named in the order
+ * `./templates.ts` would otherwise sort a directory listing into, so a
+ * `bun run dev` here draws the same two rows a full directory read would
+ * have served.
+ */
+const DEVTOOLS_ISSUE_TEMPLATE_PATHS: readonly string[] = [
+  '../../.github/ISSUE_TEMPLATE/bug-report.yml',
+  '../../.github/ISSUE_TEMPLATE/ui-feedback.yml',
+];
+
+/**
  * The dev-tools plugin under `serve`, and nothing under `build`.
  *
  * The specifier is only ever resolved on the `serve` path, so a checkout
@@ -24,7 +45,10 @@ const loadDevtoolsPlugins = async (
     return [];
   }
   const { devtoolsPlugin, rafaGateway } = await import('@ar/dev-tools/vite');
-  return [devtoolsPlugin({ gateway: rafaGateway() })];
+  return [devtoolsPlugin({
+    gateway: rafaGateway(),
+    templates: DEVTOOLS_ISSUE_TEMPLATE_PATHS,
+  })];
 };
 
 export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
