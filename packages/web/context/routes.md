@@ -87,3 +87,31 @@ point branches on which of the two is live:
   service serves under that prefix. react-router strips the basename
   before matching, a trailing `/` on it included, so both bases stay
   declared below it and no path `paths.ts` builds carries the prefix.
+
+## The dev-only crash route
+
+One more child sits below both bases in a DEV build alone:
+`__devtools/crash`, registered from `src/dev/crashRoute.tsx`
+through a call to `devRoutes()` that is spread into
+`routesBelowBase()` behind `import.meta.env.DEV`. It throws on
+render so `src/app-shell/AppErrorBoundary.tsx` has something to
+catch. Nothing else in this app fails on demand.
+
+The import is STATIC in `src/routes/router.tsx` — every other reach
+into `src/dev/` is a dynamic one behind `import.meta.env.DEV` — but
+it imports one TYPE and nothing else, so the static edge reaches no
+runtime code. A route cannot arrive on a later microtask: the
+router builds at module scope in `src/main.tsx`, and the tree is
+fixed before the first paint. The guard therefore sits at the USE
+site, in `routesBelowBase()`.
+
+Whether the route survives into a production bundle is the bundler's
+decision, not the source's: `import.meta.env.DEV` becomes a literal
+`false` at build time and the ternary folds; Vite replaces the read
+through the optional chain so the import is dropped entire. No
+module-scope element is built — the route object is constructed
+INSIDE `devRoutes()` — so rolldown sees the module as
+side-effect-free. The drop is measured by grepping a real `vite
+build`'s `dist/` for the path literal `__devtools/crash` against a
+planted `Agentic Research` control; the counts are recorded in the
+plan's close-out notes.
