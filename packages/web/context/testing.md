@@ -7,8 +7,8 @@ ports number four rather than three:
 | Runner | What it reaches | Where the tests live |
 | --- | --- | --- |
 | `vitest` | Pure modules only — node environment, no DOM, include `src/**/*.test.ts` (`.ts`, never `.tsx`) | Colocated beside the module |
-| `playwright` via `playwright.config.ts`, project `chromium` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts`, less the dev-tools spec |
-| `playwright` via `playwright.config.ts`, project `chromium-devtools` | The same app on a SECOND dev server on port 5177 carrying `VITE_DEVTOOLS_FORCE=1`, so the dev-tools widget mounts under automation | `tests/e2e/dev-tools-shell.spec.ts` alone |
+| `playwright` via `playwright.config.ts`, project `chromium` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts`, less the dev-tools specs |
+| `playwright` via `playwright.config.ts`, project `chromium-devtools` | The same app on a SECOND dev server on port 5177 carrying `VITE_DEVTOOLS_FORCE=1`, so the dev-tools widget mounts under automation | The dev-tools specs named in `DEVTOOLS_SPECS`, and nothing else |
 | `playwright` via `playwright.visual.config.ts` | The same app screenshotted at four widths in both themes, on port 5175 | `tests/visual/*.spec.ts` |
 | `playwright` via `playwright.integration.config.ts` | The same app with `VITE_AR_API_URL` SET, in a real browser against a LIVE `@ar/service` over a seeded Postgres, on port 5176 | `tests/integration/*.spec.ts` |
 
@@ -113,23 +113,28 @@ mount time skips the whole render — no button, no root, nothing. The
 screenshot suite and the default e2e suite are both untouched, and that
 absence is itself a control: the default suite asserts the trigger is
 absent, proving the automation guard held. A forced SECOND dev server on
-port 5177 drives a single spec: it is a second entry in
+port 5177 drives the dev-tools specs: it is a second entry in
 `playwright.config.ts`'s `webServer` ARRAY, paired with a second project
-`chromium-devtools` whose `testMatch` is
-`tests/e2e/dev-tools-shell.spec.ts` and which the default `chromium`
-project takes a matching `testIgnore` for. There is NO
-`playwright.devtools.config.ts` — this page named one until the config
-was written, and the array form is what shipped. The guard is overridden
-by `VITE_DEVTOOLS_FORCE=1` on that server's own `env`, never by
-`test.use`, and `test.use` could not do it: Vite reads the variable when
-the dev server STARTS and bakes it into the served modules, while a
-`test.use` block configures a browser context created long afterwards.
-That spec runs the widget in all four corner positions, opens its menu,
-moves the trigger between corners, and verifies that a reload resets the
-corner to the configured default while keeping the size. It tests the
-modal's focus trap, the drawer's placement switcher and handle, the about
-popover's version line, and proves no more than one drawer opens at a
-time — all impossible from a suite that sees no widget at all.
+`chromium-devtools` whose `testMatch` is the `DEVTOOLS_SPECS` array
+(`dev-tools-shell.spec.ts` and the feedback drawer's spec) and which the
+default `chromium` project takes as its `testIgnore`. ONE array read
+twice, because a dev-tools spec named in neither list is not skipped: it
+is collected by the DEFAULT project and driven against the plain 5174
+server, where the widget is absent by design and every locator times
+out. There is NO `playwright.devtools.config.ts` — this page named one
+until the config was written, and the array form is what shipped. The
+guard is overridden by `VITE_DEVTOOLS_FORCE=1` on that server's own
+`env`, never by `test.use`, and `test.use` could not do it: Vite reads
+the variable when the dev server STARTS and bakes it into the served
+modules, while a `test.use` block configures a browser context created
+long afterwards.
+The shell spec runs the widget in all four corner positions, opens its
+menu, moves the trigger between corners, and verifies that a reload
+resets the corner to the configured default while keeping the size. It
+tests the modal's focus trap, the drawer's placement switcher and
+handle, the about popover's version line, and proves no more than one
+drawer opens at a time — all impossible from a suite that sees no
+widget at all.
 
 Two readings that shipped with it, both measured rather than reasoned:
 
