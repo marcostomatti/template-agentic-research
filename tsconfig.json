@@ -1,13 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Umbrella root (tools + root files)",
-  "extends": "./tsconfig.base.json",
+  // tooling: tools/ and the root config files never ship, so this check
+  // runs without declarations or isolatedDeclarations.
+  "extends": ["@open-tomato/typescript-config/bun", "@open-tomato/typescript-config/tooling"],
   "compilerOptions": {
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true

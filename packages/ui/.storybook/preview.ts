@@ -32,7 +32,9 @@ const preview: Preview = {
   },
   decorators: [
     (Story, ctx) => {
-      const theme = ctx.globals.theme === 'dark' ? 'dark' : 'light';
+      const theme = ctx.globals.theme === 'dark'
+        ? 'dark'
+        : 'light';
       if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-theme', theme);
       }

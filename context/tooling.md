@@ -1,10 +1,16 @@
 ## Shared tooling
 
-- `eslint.base.mjs` + `sharedRules.mjs` at the root; each package (and the
-  root) layers its own leaf `eslint.config.mjs` on top.
-- `tsconfig.base.json` is the shared strict core; leaves specialize
-  (DOM/react-jsx for ui/web, DOM+node for dev-tools, node-strict
-  for service, root covers `tools/`).
+- ESLint comes from `@open-tomato/eslint-config`: each package (and the
+  root) has a leaf `eslint.config.mjs` spreading its base plus flavors
+  (react + vite for dev-tools and web, react + vite + cva for ui) and
+  only the project's own blocks after them.
+- TypeScript comes from `@open-tomato/typescript-config`: the root and
+  service extend its `bun` flavor (the root adds the `tooling` mixin),
+  ui, web and dev-tools its `react` flavor. Each leaf keeps only its own
+  options; ui, web, dev-tools and service turn `isolatedDeclarations`
+  off, each with a comment saying why. Service, ui and web also list the
+  package in their own `devDependencies`, because the Docker build runs
+  a `--filter` install that skips the root's.
 - Root scripts: `lint:all`, `check-types:all`, `test:all` fan out to every
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
@@ -82,7 +88,7 @@
   Mechanism, repair and the minimality reading: the `lockfile-bump-split-vs-
   dedupe` skill, plus `.claude/skills/git-workflow/SKILL.md`.
 - Three surfaces are linted by NOTHING, each measured rather than assumed.
-  `.github/workflows/*.yml`: `eslint.base.mjs` scopes its blocks to
+  `.github/workflows/*.yml`: the shared base scopes its blocks to
   js/mjs/ts, md and json, so ESLint answers `File ignored because no
   matching configuration was supplied` — one warning, zero errors, a PASS
   that read no rules. A package-root markdown file under `packages/*` (an
@@ -100,7 +106,8 @@
   it does not reflow comments, so comment/TSDoc/markdown wrapping is
   hand-maintained. Match the surrounding file rather than a global number
   (~76 cols in `packages/service/src`, ≤74 in its architecture docs).
-- `sharedRules.mjs` shapes more code than a style config usually does:
+- The shared rules (`@open-tomato/eslint-config/shared-rules`) shape more
+  code than a style config usually does:
   `@stylistic/quotes` is single with no `avoidEscape` (an apostrophe inside
   a string literal must be escaped, or rephrased away), `multiline-ternary`
   is `always` (every ternary is three lines, even a trivial one),
@@ -109,7 +116,7 @@
   parens, not after the `=>`), and `import/order` lists `type` as the FIRST
   group, so an `import type` sits above the `node:` builtins in its own
   blank-line-separated block.
-- Four more `sharedRules.mjs` behaviours, each invisible until `lint` runs
+- Four more shared-rules behaviours, each invisible until `lint` runs
   and each the likeliest single finding on a new module. `import/order`
   treats parent (`../x`) and sibling (`./y`) as SEPARATE groups, so a
   module importing both needs a blank line between them, and within the
@@ -195,11 +202,9 @@
   `lib/express/builtin-routes.ts`, `_req, _res` in `passthroughMiddleware`).
   A green `lint` is no evidence about an unused symbol here at all.
 - Two more places `lint` and `check-types` disagree, in both directions.
-  `NodeJS.WriteStream` — and every other member of the ambient `NodeJS`
-  namespace — is a `no-undef` ESLint ERROR here while tsc resolves it fine,
-  no config in the repo declaring that global; spell the type structurally
-  (`typeof process.stdout | typeof process.stderr`) rather than reaching for
-  an `eslint-disable`. And `isolatedModules` is on repo-wide, so NO spelling
+  `no-undef` is off for TypeScript files under the shared base, so an
+  ambient type such as `NodeJS.WriteStream` no longer reddens `lint`; it
+  still does in a `.js`/`.mjs` file, where `no-undef` stays on. And `isolatedModules` is on repo-wide, so NO spelling
   of an AMBIENT `const enum` member from a dependency compiles — direct
   access, destructuring, index access, a namespace import and a cast through
   `unknown` were each measured TS2748, with `lint` and a `bun -e` runtime
@@ -211,9 +216,9 @@
 - Control characters appear in tracked files only as escapes, never as
   raw bytes — a raw NUL makes `git diff` render `Bin` forever and makes
   POSIX grep report no match for text that is present, both silently.
-  Two layers enforce this: the universal `ar/no-unsafe-unicode` block in
-  `eslint.base.mjs` (rule source: root `unsafeUnicode.mjs`) covers every
-  linted language, and `bun run gate:control-bytes`
+  Two layers enforce this: the universal `@open-tomato/no-unsafe-unicode`
+  block in the shared base (rule source: `@open-tomato/eslint-plugin`)
+  covers every linted language, and `bun run gate:control-bytes`
   (`tools/control-byte-gate/`) is the byte-level floor over every
   tracked file — deny-by-default file selection, exit 2 when it cannot
   run, zero files scanned is a failure, `--staged` judges index blobs.
@@ -390,7 +395,7 @@
   prose cap here rather than being exempt like a table row. A fence INDENTED
   inside a list item hands that indentation to whatever reads it, so a
   multi-line `python3 -c` snippet under a bullet dies on IndentationError and
-  belongs at column 0. A fence also needs a LANGUAGE: `eslint.base.mjs`
+  belongs at column 0. A fence also needs a LANGUAGE: the shared base
   extends `markdown/recommended`, whose `fenced-code-language` rule errors on
   a bare ``` — `text` is the fallback for a block that is no
   language, and it is `lint` rather than any doc gate that reports it.

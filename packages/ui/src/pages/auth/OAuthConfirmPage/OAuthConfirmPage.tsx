@@ -25,7 +25,7 @@ export const OAuthConfirmPage = ({ provider }: OAuthConfirmPageProps) => {
     <AuthShell eyebrow={`signed in with ${provider}`}>
       <AuthHeading
         title="One more thing"
-        sub={<>We grabbed your details from {provider}. Pick a username and you're in.</>}
+        sub={<>We grabbed your details from {provider}. Pick a username and you&apos;re in.</>}
       />
 
       <Stepper tone="accent" size="sm" items={SIGNUP_STEPS} index={0} />

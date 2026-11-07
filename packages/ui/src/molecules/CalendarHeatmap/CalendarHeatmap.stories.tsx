@@ -11,8 +11,7 @@ const END = '2026-05-27T12:00:00';
  */
 const WEEK_DATA: CalendarHeatmapDatum[] = (() => {
   const out: CalendarHeatmapDatum[] = [];
-  // Monday of the week containing END.
-  const monday = new Date(2026, 4, 25);
+  // Day 0 is 2026-05-25, the Monday of the week containing END.
   for (let day = 0; day < 7; day++) {
     for (let hour = 0; hour < 24; hour++) {
       let intensity = 0.04;

@@ -109,8 +109,10 @@ while still reading as scheduled.
 - Security findings route to a private advisory, never a public tracker —
   and are never searched for on a public tracker first (see the
   `qa-bug-reporter` agent).
-- No `@open-tomato/*` imports anywhere (ESLint-enforced). Origin prose only
-  in README/NOTICE.
+- No `@open-tomato/*` imports anywhere (ESLint-enforced), except the
+  shared lint and TypeScript configs: dev-only tooling named only in the
+  `eslint.config.mjs` and `tsconfig.json` files, which the ui and web
+  import bans leave out. Origin prose only in README/NOTICE.
 - De-origination has two halves and only one of them is automated. The
   forbidden needles live once, assembled from string parts, in
   `packages/service/tests/invariants/naming-patterns.ts` — never write one

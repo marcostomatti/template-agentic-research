@@ -38,7 +38,7 @@
  * the grammar leaves it no choice.
  *
  * C0 is taken whole, TAB, LF and CR included, and that is a wider
- * set than `ar/no-unsafe-unicode` reports in a source file. The two
+ * set than `@open-tomato/no-unsafe-unicode` reports in a source file. The two
  * rules have different subjects. That one protects a file a human
  * edits, where those three characters are the file's own structure;
  * this one masks a value being quoted into a JSON string, where

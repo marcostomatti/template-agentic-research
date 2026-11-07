@@ -1,40 +1,29 @@
-import stylistic from '@stylistic/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import { defineConfig } from 'eslint/config';
-import importPlugin from 'eslint-plugin-import';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
-import pluginReact from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
-import { default as reactRefresh } from 'eslint-plugin-react-refresh';
-import globals from 'globals';
+import baseConfig from '@open-tomato/eslint-config';
+import reactConfig from '@open-tomato/eslint-config/react';
+import viteConfig from '@open-tomato/eslint-config/vite';
 
-import baseConfig from '../../eslint.base.mjs';
-import sharedRules from '../../sharedRules.mjs';
-
-// Reference-free gate targets — split so the literal names never appear in
-// this file (same convention as @ar/ui).
+// Reference-free gate targets — split so the needles are never spelled out
+// as literals here (same convention as @ar/ui). The shared lint config
+// imported above is the one deliberate exception: dev-only tooling.
 const BANNED_SOURCE_SCOPE = ['@open', 'tomato'].join('-');
 const BANNED_SOURCE_REPO = ['component', 'breakdown'].join('-');
 
 /**
- * ESLint configuration for the web app (React consumer of @ar/ui).
+ * ESLint configuration for the web app (React consumer of @ar/ui): the
+ * shared open-tomato base with its React and Vite flavors, plus the app's
+ * own reference-free gate.
  *
- * @type {import("eslint").Linter.Config} */
-export default defineConfig([
-  {
-    ignores: [
-      'dist/**',
-      'build/**',
-      'node_modules/**',
-    ],
-  },
-  baseConfig,
-  importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+ * @type {import("eslint").Linter.Config[]} */
+export default [
+  ...baseConfig,
+  ...reactConfig,
+  ...viteConfig,
   {
     // The app consumes @ar/ui only — never the repositories it was
-    // extracted from.
+    // extracted from. This file is left out: it imports the shared ESLint
+    // config, a dev-only tool that never reaches the app.
     files: ['**/*.{js,mjs,cjs,ts,tsx,jsx}'],
+    ignores: ['eslint.config.mjs'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [
@@ -50,56 +39,4 @@ export default defineConfig([
       }],
     },
   },
-  {
-    files: ['**/*.jsx', '**/*.tsx'],
-    extends: [
-      baseConfig,
-      reactHooks.configs.flat.recommended,
-      jsxA11y.flatConfigs.recommended,
-      reactRefresh.configs.vite,
-      reactRefresh.configs.recommended,
-    ],
-    languageOptions: {
-      parser: tsParser,
-      globals: {
-        ...globals.browser,
-      },
-    },
-    plugins: {
-      react: pluginReact,
-      '@stylistic': stylistic,
-    },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-      'import/parsers': {
-        '@typescript-eslint/parser': ['.ts', '.tsx'],
-      },
-      'import/resolver': {
-        typescript: {
-          project: [
-            './tsconfig.json',
-          ],
-        },
-      },
-    },
-    rules: {
-      ...sharedRules,
-      'react/display-name': 'off',
-      'react/prop-types': 'off',
-      'react/function-component-definition': 0,
-      'react/jsx-filename-extension': [
-        1,
-        {
-          'extensions': [
-            '.tsx',
-            '.ts',
-          ],
-        },
-      ],
-      'react/react-in-jsx-scope': 'off',
-      'react/require-default-props': 0,
-    },
-  },
-]);
+];

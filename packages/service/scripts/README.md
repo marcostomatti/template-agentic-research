@@ -393,7 +393,7 @@ service tsconfig used to exclude test files package-wide; it no longer
 does, so that zero is now about this directory rather than about a gate.)
 
 `eslint scripts -f json` reports one file more for this directory: the
-same scripts plus this README, because `eslint.base.mjs` lints markdown
+same scripts plus this README, because the shared ESLint base lints markdown
 wherever a target reaches it. Run it from inside the package — from the
 repo root the leaf config never applies, and eslint reports the path
 ignored while still exiting 0, which reads exactly like a clean lint of a
@@ -403,8 +403,8 @@ A listing says what a gate read, never what it would catch, and the two
 catch disjoint things. A scratch `scripts/__gate-probe.ts` holding one
 type error makes `bun run check-types` exit 2 naming the file and the
 line, and lints at zero errors and zero warnings in the same second,
-because the type-aware `project` setting in `eslint.base.mjs` is commented
-out. So a green `lint` here is no evidence about types and a green
+because the leaf config does not lay the shared `type-aware` flavor over
+its base. So a green `lint` here is no evidence about types and a green
 `check-types` is none about style: a directory is covered only once both
 reports name it.
 

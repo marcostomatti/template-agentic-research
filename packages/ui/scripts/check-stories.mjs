@@ -10,8 +10,8 @@
  *   bun run build:storybook
  *   node scripts/check-stories.mjs [staticDir=storybook-static] [port=6007]
  */
-import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { join, extname, resolve } from 'node:path';
 
 import { chromium } from 'playwright';
@@ -33,7 +33,9 @@ const MIME = {
 const server = createServer(async (req, res) => {
   try {
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const file = join(staticDir, path === '/' ? 'index.html' : path);
+    const file = join(staticDir, path === '/'
+      ? 'index.html'
+      : path);
     const body = await readFile(file);
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
     res.end(body);

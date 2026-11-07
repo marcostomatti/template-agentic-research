@@ -1,14 +1,6 @@
-import stylistic from '@stylistic/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import { defineConfig } from 'eslint/config';
-import importPlugin from 'eslint-plugin-import';
-import pluginReact from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
-import { default as reactRefresh } from 'eslint-plugin-react-refresh';
-import globals from 'globals';
-
-import baseConfig from '../../eslint.base.mjs';
-import sharedRules from '../../sharedRules.mjs';
+import baseConfig from '@open-tomato/eslint-config';
+import reactConfig from '@open-tomato/eslint-config/react';
+import viteConfig from '@open-tomato/eslint-config/vite';
 
 // Decision 1's layering, encoded once so a message is authored in one place.
 //
@@ -34,10 +26,8 @@ const NODE_BUILTIN_PATTERNS = [
 ];
 
 /**
- * ESLint configuration for @ar/dev-tools.
- *
- * Layered over the root base config and the shared rules the way
- * packages/web/eslint.config.mjs layers them.
+ * ESLint configuration for @ar/dev-tools: the shared open-tomato base with
+ * its React and Vite flavors, plus this package's own layering.
  *
  * The three `no-restricted-imports` blocks below encode decision 1's
  * layering. They are ordered on purpose: a flat-config rule entry REPLACES an
@@ -47,48 +37,11 @@ const NODE_BUILTIN_PATTERNS = [
  * Reordering them silently drops the node ban from src/core/** and
  * src/features/**.
  *
- * @type {import("eslint").Linter.Config} */
-export default defineConfig([
-  {
-    ignores: [
-      'dist/**',
-      'build/**',
-      'node_modules/**',
-    ],
-  },
-  baseConfig,
-  importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
-  {
-    // Type-only DOM globals, declared because `no-undef` cannot see them.
-    //
-    // `sharedRules.mjs` sets `no-undef` to error and the base config takes
-    // its globals from the `globals` package, which lists RUNTIME globals
-    // only. `RequestInit` exists in TypeScript's DOM lib as a type and has
-    // no runtime binding, so `globals.browser` does not carry it and a
-    // signature naming it reads as `'RequestInit' is not defined` — a
-    // false positive `tsc` disagrees with (measured: `check-types` is
-    // green over the same line). Listed rather than switching `no-undef`
-    // off for TypeScript, so a genuinely undefined identifier is still an
-    // error here.
-    //
-    // The list grows one measured name at a time: each entry below was
-    // added because a file naming that type red `no-undef` while
-    // `check-types` stayed green over the same line. `BlobCallback`,
-    // `DisplayMediaStreamOptions`, `EventListener` and
-    // `MediaStreamTrackState` arrived with the screenshot capture
-    // (`src/features/feedback/capture.ts` and its cases).
-    files: ['src/**/*.{js,mjs,cjs,ts,tsx,jsx}'],
-    languageOptions: {
-      globals: {
-        BlobCallback: 'readonly',
-        DisplayMediaStreamOptions: 'readonly',
-        EventListener: 'readonly',
-        MediaStreamTrackState: 'readonly',
-        RequestInit: 'readonly',
-      },
-    },
-  },
+ * @type {import("eslint").Linter.Config[]} */
+export default [
+  ...baseConfig,
+  ...reactConfig,
+  ...viteConfig,
   {
     // Browser layer: no node builtin anywhere under src/ but the node layer.
     files: ['src/**/*.{js,mjs,cjs,ts,tsx,jsx}'],
@@ -143,55 +96,4 @@ export default defineConfig([
       }],
     },
   },
-  {
-    files: ['**/*.jsx', '**/*.tsx'],
-    extends: [
-      baseConfig,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-      reactRefresh.configs.recommended,
-    ],
-    languageOptions: {
-      parser: tsParser,
-      globals: {
-        ...globals.browser,
-      },
-    },
-    plugins: {
-      react: pluginReact,
-      '@stylistic': stylistic,
-    },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-      'import/parsers': {
-        '@typescript-eslint/parser': ['.ts', '.tsx'],
-      },
-      'import/resolver': {
-        typescript: {
-          project: [
-            './tsconfig.json',
-          ],
-        },
-      },
-    },
-    rules: {
-      ...sharedRules,
-      'react/display-name': 'off',
-      'react/prop-types': 'off',
-      'react/function-component-definition': 0,
-      'react/jsx-filename-extension': [
-        1,
-        {
-          'extensions': [
-            '.tsx',
-            '.ts',
-          ],
-        },
-      ],
-      'react/react-in-jsx-scope': 'off',
-      'react/require-default-props': 0,
-    },
-  },
-]);
+];

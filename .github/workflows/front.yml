@@ -24,10 +24,6 @@ on:
       - 'packages/dev-tools/**'
       - 'package.json'
       - 'bun.lock'
-      - 'tsconfig.base.json'
-      - 'eslint.base.mjs'
-      - 'sharedRules.mjs'
-      - 'unsafeUnicode.mjs'
       - '.github/workflows/front.yml'
   push:
     branches: [main]
@@ -37,10 +33,6 @@ on:
       - 'packages/dev-tools/**'
       - 'package.json'
       - 'bun.lock'
-      - 'tsconfig.base.json'
-      - 'eslint.base.mjs'
-      - 'sharedRules.mjs'
-      - 'unsafeUnicode.mjs'
       - '.github/workflows/front.yml'
 
 # The visual job runs on a self-hosted runner: never execute fork code there.

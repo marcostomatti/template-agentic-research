@@ -182,7 +182,7 @@ red package never masks another and a single run gives the whole picture.
   `import { Page } from 'playwright-core'`; locally that store dir's only
   sibling was `playwright` and no `playwright-core` existed at the root or
   under `packages/web`, so the import resolved to nothing,
-  `tsconfig.base.json`'s `skipLibCheck: true` suppressed the resulting
+  the shared tsconfig base's `skipLibCheck: true` suppressed the resulting
   TS2307 inside `node_modules`, `Page` degraded to `any`, and the call was
   green. The runner's `bun install --frozen-lockfile` resolved the same
   peer to the OTHER pinned copy and answered TS2322 naming both store

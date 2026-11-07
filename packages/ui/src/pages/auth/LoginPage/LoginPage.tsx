@@ -118,7 +118,7 @@ export const LoginPage = ({ mode = 'default', onForgot, onSignup }: LoginPagePro
       </Button>
 
       <div className="text-center font-mono text-[11px] text-fg3">
-        we're an open-source community · <a href="#terms" onClick={preventPlaceholderNav} className="text-accent">terms</a> ·{' '}
+        we&apos;re an open-source community · <a href="#terms" onClick={preventPlaceholderNav} className="text-accent">terms</a> ·{' '}
         <a href="#privacy" onClick={preventPlaceholderNav} className="text-accent">privacy</a>
       </div>
     </AuthShell>

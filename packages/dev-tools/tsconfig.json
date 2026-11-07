@@ -1,14 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Dev tools",
-  "extends": "../../tsconfig.base.json",
+  "extends": "@open-tomato/typescript-config/react",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
-    "useDefineForClassFields": true,
-    "noImplicitOverride": true,
+    // Off: vite-plugin-dts emits this package's declarations from the full
+    // program, and eight of the exports it would flag are Zod schemas
+    // (reportTemplateSchema and its parts) whose inferred types other
+    // schemas build on with .extend(), so a hand-written annotation would
+    // narrow the public type. Follow-up: turn it on once those schemas get
+    // explicit types.
+    "isolatedDeclarations": false,
     "types": ["node"]
   },
   "include": ["src", "*.ts", "*.mjs"],

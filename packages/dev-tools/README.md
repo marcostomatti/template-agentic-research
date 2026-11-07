@@ -302,7 +302,7 @@ like a gateway-absent `stored` — so the widget shows a prefilled GitHub
 new-issue link beside a copy block of the same body, so a triager can
 carry the content over by hand:
 
-```
+```text
 /issues/new?template=<file>&title=[fb/<round>] <title>&body=<body>
 ```
 

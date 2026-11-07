@@ -55,7 +55,7 @@ const PARALLELISM_LANES = 1;
  * `Algorithm.Argon2id`, spelled as its numeric value.
  *
  * `@node-rs/argon2` declares `Algorithm` as an AMBIENT `const enum`, and
- * this repo compiles with `isolatedModules` (`tsconfig.base.json`),
+ * this repo compiles with `isolatedModules` (the shared tsconfig base),
  * under which naming any member of one is TS2748. Measured on every
  * form that reaches the member — direct access, destructuring, index
  * access, a namespace import, and a cast through `unknown` — so there

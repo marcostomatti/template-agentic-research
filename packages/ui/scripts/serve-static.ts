@@ -13,7 +13,9 @@ Bun.serve({
   port,
   async fetch(req) {
     const path = decodeURIComponent(new URL(req.url).pathname);
-    const file = Bun.file(`${dir}${path === '/' ? '/index.html' : path}`);
+    const file = Bun.file(`${dir}${path === '/'
+      ? '/index.html'
+      : path}`);
     if (await file.exists()) return new Response(file);
     return new Response('not found', { status: 404 });
   },
