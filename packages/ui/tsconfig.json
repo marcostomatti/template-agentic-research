@@ -1,16 +1,16 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "React Library",
-  "extends": "../../tsconfig.base.json",
+  "extends": "@open-tomato/typescript-config/react",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
+    // Off: vite-plugin-dts emits this library's declarations from the full
+    // program, and turning it on reports ~640 exports without an explicit
+    // type, most of them CVA variant functions and Storybook meta/story
+    // objects whose inferred types cannot be written by hand. Follow-up:
+    // annotate the component exports, then turn it on for src/.
+    "isolatedDeclarations": false,
     "allowImportingTsExtensions": false,
-    "verbatimModuleSyntax": true,
     "allowSyntheticDefaultImports": true,
-    "noImplicitOverride": true,
-    "useDefineForClassFields": true,
-    "jsx": "react-jsx",
     "types": ["node"]
   },
   "include": ["src", "*.ts", "*.tsx", "*.mjs", ".storybook"],

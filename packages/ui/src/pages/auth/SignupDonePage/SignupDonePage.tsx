@@ -36,7 +36,7 @@ export const SignupDonePage = () => (
       Go to the dashboard
     </Button>
     <a href="#dashboard" onClick={preventPlaceholderNav} className="text-center text-[13px] text-fg3 !no-underline">
-      I'll explore on my own →
+      I&apos;ll explore on my own →
     </a>
   </AuthShell>
 );

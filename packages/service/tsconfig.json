@@ -1,15 +1,16 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Service",
-  "extends": "../../tsconfig.base.json",
+  "extends": "@open-tomato/typescript-config/bun",
   "compilerOptions": {
+    // An app that ships as a container and never emits declarations.
     "declaration": false,
-    "forceConsistentCasingInFileNames": true,
+    // Off: with no declarations emitted there is nothing for it to check
+    // per file, and most exports are Zod schemas and Drizzle tables whose
+    // inferred types cannot be written by hand. Follow-up: turn it on if a
+    // module is ever published as a package.
+    "isolatedDeclarations": false,
     "incremental": false,
-    "lib": ["es2022"],
-    "module": "es2022",
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
     "noImplicitThis": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true

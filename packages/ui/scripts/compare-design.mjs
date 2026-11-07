@@ -47,8 +47,8 @@
  * - auth/topbar/dashboard modes need network access when the design pages
  *   load React UMD + Babel standalone from a CDN.
  */
-import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { join, extname, resolve } from 'node:path';
 
 import { chromium } from 'playwright';
@@ -61,12 +61,20 @@ if (!storyId || !specName) {
   console.error('usage: node scripts/compare-design.mjs <story-id> <SpecName> [--source auth] [--theme dark] [--set key=value]…');
   process.exit(2);
 }
-const source = args.includes('--source') ? args[args.indexOf('--source') + 1] : 'bundle';
-const theme = args.includes('--theme') ? args[args.indexOf('--theme') + 1] : 'light';
-const selector = args.includes('--selector') ? args[args.indexOf('--selector') + 1] : null;
+const source = args.includes('--source')
+  ? args[args.indexOf('--source') + 1]
+  : 'bundle';
+const theme = args.includes('--theme')
+  ? args[args.indexOf('--theme') + 1]
+  : 'light';
+const selector = args.includes('--selector')
+  ? args[args.indexOf('--selector') + 1]
+  : null;
 const fullpage = args.includes('--fullpage');
 const sets = args
-  .flatMap((a, i) => (a === '--set' ? [args[i + 1]] : []))
+  .flatMap((a, i) => (a === '--set'
+    ? [args[i + 1]]
+    : []))
   .map((kv) => kv.split('='));
 
 const SOURCES = {
@@ -99,7 +107,9 @@ function serve(dir, port) {
   const server = createServer(async (req, res) => {
     try {
       const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      const file = join(dir, path === '/' ? 'index.html' : path);
+      const file = join(dir, path === '/'
+        ? 'index.html'
+        : path);
       const body = await readFile(file);
       res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
       res.end(body);
@@ -203,13 +213,16 @@ try {
     });
     await design.evaluate(() => document.fonts.ready);
     await design.waitForTimeout(250);
-    const demoBox = selector ? card.locator(selector).first() : card.locator('.check-bg').first();
+    const demoBox = selector
+      ? card.locator(selector).first()
+      : card.locator('.check-bg').first();
     await demoBox.screenshot({ path: designPath, animations: 'disabled' });
   } else if (source === 'dashboard') {
     // Whole-app screens (usage.html, agents.html, …): no artboards to crop
     // to — capture the full mounted page, or --selector for a region.
     await design.setViewportSize({ width: 1280, height: 900 });
-    await design.locator('#root > *').first().waitFor({ timeout: 60_000 });
+    await design.locator('#root > *').first()
+      .waitFor({ timeout: 60_000 });
     await design.evaluate(() => document.fonts.ready);
     await design.waitForTimeout(400);
     if (selector) {
@@ -224,9 +237,10 @@ try {
     await section.waitFor({ timeout: 30_000 });
     await section.scrollIntoViewIfNeeded();
 
-    for (const [key, value] of sets) {
+    for (const [, value] of sets) {
       // Segmented controls render one button per variant value, labeled with it.
-      await section.locator('button', { hasText: value }).first().click();
+      await section.locator('button', { hasText: value }).first()
+        .click();
       await design.waitForTimeout(150);
     }
 

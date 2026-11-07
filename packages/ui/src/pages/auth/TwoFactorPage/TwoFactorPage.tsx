@@ -78,7 +78,7 @@ export const TwoFactorPage = ({ step = 'pick', qr }: TwoFactorPageProps) => {
             </div>
           </div>
           <Button variant="primary" block iconLeading={<StrokeIcon name="arrowRight" size={15} />}>
-            I've scanned it
+            I&apos;ve scanned it
           </Button>
         </>
       )}

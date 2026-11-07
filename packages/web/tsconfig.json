@@ -1,14 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Web app",
-  "extends": "../../tsconfig.base.json",
+  "extends": "@open-tomato/typescript-config/react",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
-    "useDefineForClassFields": true,
-    "noImplicitOverride": true,
+    // An app bundled by Vite: no declarations are ever emitted.
+    "declaration": false,
+    // Off for the same reason: nothing ships a .d.ts, so annotating every
+    // export would buy no per-file declaration build.
+    "isolatedDeclarations": false,
     "types": ["vite/client"]
   },
   "include": ["src", "tests", "*.ts", "*.tsx", "*.mjs"],

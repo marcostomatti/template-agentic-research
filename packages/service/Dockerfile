@@ -31,7 +31,6 @@ RUN bun install --frozen-lockfile --filter '@ar/service'
 FROM deps AS build
 WORKDIR /app
 
-COPY tsconfig.base.json ./
 COPY packages/service/tsconfig.json ./packages/service/
 COPY packages/service/lib ./packages/service/lib
 COPY packages/service/src ./packages/service/src
@@ -65,7 +64,6 @@ COPY packages/web/package.json ./packages/web/
 COPY packages/dev-tools/package.json ./packages/dev-tools/
 RUN bun install --frozen-lockfile --filter '@ar/ui' --filter '@ar/web'
 
-COPY tsconfig.base.json ./
 COPY packages/ui/tsconfig.json packages/ui/vite.config.ts ./packages/ui/
 COPY packages/ui/src ./packages/ui/src
 WORKDIR /app/packages/ui

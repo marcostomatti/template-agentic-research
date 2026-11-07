@@ -27,7 +27,7 @@ pages back into every turn and the split would save nothing.
 
 - `context/tooling.md` — shared config (the root eslint/tsconfig layering,
   the fan-out scripts), bun's isolated linker and its per-directory `bun x`,
-  the `sharedRules.mjs` behaviours that shape code, the control-byte law, and
+  the shared lint rules' behaviours that shape code, the control-byte law, and
   the shell and git traps that make a reading report nothing.
 - `context/security.md` — the `.plans/` and `.specs/` law (gitignored on
   purpose, never moved into a tracked path) and the de-origination posture:

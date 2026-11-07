@@ -32,7 +32,7 @@ export const ForgotSentPage = () => (
     </Button>
 
     <div className="flex items-center justify-center gap-1.5 text-[13px] text-fg3">
-      Didn't get it?
+      Didn&apos;t get it?
       <a href="#resend" onClick={preventPlaceholderNav} className="font-semibold text-accent">Resend</a>
       <span>·</span>
       <a href="#change-email" onClick={preventPlaceholderNav} className="font-semibold text-accent">Use a different email</a>

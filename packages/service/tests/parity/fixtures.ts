@@ -41,7 +41,7 @@
  * should do with them.
  *
  * Invisible characters come from code points and never from a glyph in
- * this file. `ar/no-unsafe-unicode` is an error repo-wide and
+ * this file. `@open-tomato/no-unsafe-unicode` is an error repo-wide and
  * `bun run gate:control-bytes` is the byte-level floor under it, so a
  * literal zero-width space would not survive lint — but the stronger
  * reason is that a reviewer cannot see one, which is the property that
@@ -576,7 +576,7 @@ function invisible(
  * contract strips them before measuring anything. The bidi members are
  * here for a second reason: they reorder what a reviewer reads without
  * changing what a machine gets — the same disagreement
- * `ar/no-unsafe-unicode` refuses in source.
+ * `@open-tomato/no-unsafe-unicode` refuses in source.
  */
 export const INVISIBLE_CODE_POINTS: readonly InvisibleCharacter[] = [
   invisible('soft-hyphen', 0x00ad, 'a hyphen a renderer may decline to draw'),

@@ -1,18 +1,9 @@
-import globals from 'globals';
+import baseConfig from '@open-tomato/eslint-config';
 
-import baseConfig from '../../eslint.base.mjs';
-
-/** @type {import("eslint").Linter.Config} */
+/** @type {import("eslint").Linter.Config[]} */
 export default [
-  { ignores: ['.tmp/**', '.docs/**', 'drizzle/**'] },
+  { ignores: ['drizzle/**'] },
   ...baseConfig,
-  {
-    languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-    },
-  },
   {
     // The MCP SDK's `exports` map routes subpaths through a wildcard
     // `./*` whose `types` target is `./dist/esm/*.d.ts`, so a specifier

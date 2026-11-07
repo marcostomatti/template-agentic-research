@@ -312,6 +312,9 @@ function PopoverSurface({
   };
 
   return (
+    // A dialog owns its Escape: `popover="manual"` gives it none, so the
+    // keydown listener on the surface is the dialog's dismiss control.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       ref={setSurface}
       className="devtools-popover"

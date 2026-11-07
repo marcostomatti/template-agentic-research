@@ -122,7 +122,7 @@ const ROUTE_SCHEMA_MEMBERS: Readonly<Record<keyof RouteSchemas, true>> = {
  * It refuses on exactly ONE input the type accepts, and the
  * asymmetry is deliberate: `{ params: undefined }`. That literal
  * type-checks, because `exactOptionalPropertyTypes` is not set in
- * `tsconfig.base.json` and an optional member therefore admits an
+ * the shared tsconfig base and an optional member therefore admits an
  * explicit `undefined` — so the type cannot express the difference
  * and this is the only place the difference can be stated. What it
  * catches is worth the asymmetry: a member bound to an import that

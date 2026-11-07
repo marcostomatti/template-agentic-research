@@ -41,7 +41,7 @@ export const ForgotEmailPage = () => {
       <div className="flex items-start gap-2.5 rounded-md border border-border-soft bg-surface-sunk p-3">
         <StrokeIcon name="helpCircle" size={14} className="mt-0.5 shrink-0 text-fg3" />
         <span className="text-xs leading-[1.55] text-fg2">
-          If you signed up with Google or GitHub, you don't have a password — sign in through
+          If you signed up with Google or GitHub, you don&apos;t have a password — sign in through
           that provider instead.
         </span>
       </div>

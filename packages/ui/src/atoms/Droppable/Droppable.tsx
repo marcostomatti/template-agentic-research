@@ -255,13 +255,16 @@ export type DroppableProps =
 /** The one public component — `feedback` picks the presentation. */
 export const Droppable = (props: DroppableProps) => {
   if (props.feedback === 'inline') {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped so it never reaches the DOM
     const { feedback: _feedback, ...rest } = props;
     return <DroppableInline {...rest} />;
   }
   if (props.feedback === 'region') {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped so it never reaches the DOM
     const { feedback: _feedback, ...rest } = props;
     return <DroppableRegion {...rest} />;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped so it never reaches the DOM
   const { feedback: _feedback, ...rest } = props;
   return <DroppableZone {...rest} />;
 };

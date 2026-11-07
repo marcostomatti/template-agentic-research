@@ -110,10 +110,10 @@ looks and each entry means a shape review has to catch: `max-len`,
 lint-clean and sibling sites already carry them), `no-use-before-define`
 (so a self-referential stub may return its own hoisted binding),
 `no-inferrable-types` (so an explicit `const X: string = 'literal'` is
-fine), and `exactOptionalPropertyTypes` — `tsconfig.base.json` carries only
-`strict: true`. Do not generalise from that to style at large: style here
+fine), and `exactOptionalPropertyTypes` — the shared tsconfig base
+(`@open-tomato/typescript-config`) does not set it. Do not generalise from that to style at large: style here
 is UNPOLICED on width and type-awareness while being strict on SHAPE, and
-`sharedRules.mjs` DOES carry `@stylistic/newline-per-chained-call`, so a
+the shared lint rules DO carry `@stylistic/newline-per-chained-call`, so a
 two-hop builtin chain such as
 `createHash('sha256').update(t, 'utf8').digest()` is an ERROR even at 60
 columns. Write any chain past one `.` broken one call per line from the
