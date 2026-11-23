@@ -418,18 +418,46 @@ const BANG_TAG_RE = /<![^>]*>/g;
  * why both patterns sit inside the one repeat. Each pass that changes
  * the text makes it shorter, so the repeat ends.
  *
+ * Each pattern gets its own inner repeat in {@link removeUntilStable},
+ * because CodeQL's `js/incomplete-multi-character-sanitization` reads a
+ * replace as a fixed point only when its result writes back to the
+ * variable it reads. Two chained calls in one loop do not have that
+ * shape. For text the original left stable, the answer is the same as
+ * one pass of each.
+ *
  * @param text - The markup left after the structural passes.
  * @returns The text with no {@link ANY_TAG_RE} or {@link BANG_TAG_RE}
  * match left in it.
  */
 function removeRemainingTags(text: string): string {
-  let previous = text;
-  let current = text.replace(ANY_TAG_RE, '').replace(BANG_TAG_RE, '');
+  let current = text;
+  let previous: string;
 
-  while (current !== previous) {
+  do {
     previous = current;
-    current = current.replace(ANY_TAG_RE, '').replace(BANG_TAG_RE, '');
-  }
+    current = removeUntilStable(current, ANY_TAG_RE);
+    current = removeUntilStable(current, BANG_TAG_RE);
+  } while (current !== previous);
+
+  return current;
+}
+
+/**
+ * Removes every match of one global pattern, repeating until the text
+ * stops changing.
+ *
+ * @param text - The text to clear.
+ * @param pattern - A global pattern; `replace` resets its cursor.
+ * @returns The text with no match of `pattern` left in it.
+ */
+function removeUntilStable(text: string, pattern: RegExp): string {
+  let current = text;
+  let previous: string;
+
+  do {
+    previous = current;
+    current = current.replace(pattern, '');
+  } while (current !== previous);
 
   return current;
 }
