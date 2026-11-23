@@ -39,6 +39,9 @@ on:
       - 'vitest.config.ts'
       - '.github/workflows/back.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
