@@ -302,17 +302,21 @@ function restoreSpan(spans: readonly string[], index: string): string {
  * the scan: `<<b>script>` loses its `<b>` and leaves `<script>`. Each
  * pass that changes the text makes it shorter, so the repeat ends.
  *
+ * The one replace call sits inside the loop and writes back to the
+ * variable it reads, which is the shape CodeQL's
+ * `js/incomplete-multi-character-sanitization` reads as a fixed point.
+ *
  * @param text - The text to clear.
  * @returns The text with no {@link HTML_TAG_RE} match left in it.
  */
 function removeRawTags(text: string): string {
-  let previous = text;
-  let current = text.replace(HTML_TAG_RE, '');
+  let current = text;
+  let previous: string;
 
-  while (current !== previous) {
+  do {
     previous = current;
     current = current.replace(HTML_TAG_RE, '');
-  }
+  } while (current !== previous);
 
   return current;
 }
