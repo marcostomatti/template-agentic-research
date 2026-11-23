@@ -182,6 +182,22 @@ describe('html-text — markup that is broken', () => {
     expect(htmlToText('<>')).toBe('<>');
   });
 
+  // A tag nested inside another. Removing the inner one joins the
+  // outer one back together, so the tag passes repeat until nothing
+  // changes. The declaration pass is inside that repeat: removing a
+  // declaration can rebuild a tag as much as removing a tag can.
+  it('removes a tag that removing another one rebuilt', () => {
+    expect(htmlToText('<<b>script>alert(1)<</b>/script>')).toBe('alert(1)');
+    expect(htmlToText('<<img>img src=x onerror=alert(1)>')).toBe('');
+    expect(htmlToText('a <</i>/b> c')).toBe('a c');
+    expect(htmlToText('<p><<i>a href=x>link<</i>/a></p>')).toBe('link');
+  });
+
+  it('removes a tag that removing a declaration rebuilt', () => {
+    expect(htmlToText('<<!x>img src=x onerror=alert(1)>tail')).toBe('tail');
+    expect(htmlToText('<!<i>DOCTYPE html>body')).toBe('body');
+  });
+
   // Nothing in, nothing out. Both spellings of nothing, since the
   // early return reads the text as a boolean.
   it('answers nothing for an empty document', () => {

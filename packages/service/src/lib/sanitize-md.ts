@@ -96,6 +96,17 @@
  * markup dialect and not of either, so the port carries the passes and
  * not the thing they were pointed at.
  *
+ * One behaviour is CHANGED on purpose, because the original's reading
+ * broke the rule this file exists for. The original removed raw tags
+ * in a single pass, so a tag nested inside another came back joined
+ * into a working one (`<<b>script>` became `<script>`), and a tag
+ * inside an embed's alt text or address was parked before the tag
+ * pass ever saw it. {@link removeRawTags} repeats the removal until
+ * nothing changes, and the embed pass runs it over both groups. The
+ * parity suite, when armed against the original, reports these inputs
+ * as divergences; that difference is the fix, and the cases under
+ * "tags written to rebuild themselves" in the unit suite pin it.
+ *
  * Two behaviours are preserved DELIBERATELY and are worth finding here
  * rather than in a debugger.
  *
@@ -284,6 +295,29 @@ function restoreSpan(spans: readonly string[], index: string): string {
 }
 
 /**
+ * Removes every raw tag, repeating until the text stops changing.
+ *
+ * One pass is not enough. A global replace scans once, so removing a
+ * tag nested inside another joins the outer one back together behind
+ * the scan: `<<b>script>` loses its `<b>` and leaves `<script>`. Each
+ * pass that changes the text makes it shorter, so the repeat ends.
+ *
+ * @param text - The text to clear.
+ * @returns The text with no {@link HTML_TAG_RE} match left in it.
+ */
+function removeRawTags(text: string): string {
+  let previous = text;
+  let current = text.replace(HTML_TAG_RE, '');
+
+  while (current !== previous) {
+    previous = current;
+    current = current.replace(HTML_TAG_RE, '');
+  }
+
+  return current;
+}
+
+/**
  * Neutralize untrusted text so it can be embedded verbatim.
  *
  * Every word survives, in order, including words that read as
@@ -332,12 +366,17 @@ export function sanitizeUntrusted(text: string): string {
 
   // 1. Image embeds become a parked inline-code plain link, before the
   //    link pass, so their inner URL is neutralized exactly once.
+  //    A parked span is out of reach of the tag pass below, so its alt
+  //    text and its address lose their tags here.
   s = s.replace(IMAGE_EMBED_RE, function (_match, alt: string, url: string) {
-    return protect('`[image link removed: ' + alt + '](' + url + ')`');
+    return protect(
+      '`[image link removed: ' + removeRawTags(alt)
+      + '](' + removeRawTags(url) + ')`',
+    );
   });
 
-  // 2. Raw tags go.
-  s = s.replace(HTML_TAG_RE, '');
+  // 2. Raw tags go, nested ones included.
+  s = removeRawTags(s);
 
   // 3. Bare links become inline code, so a click is deliberate. Embeds
   //    are already parked, so only genuinely bare links remain.

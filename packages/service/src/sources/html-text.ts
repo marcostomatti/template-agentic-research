@@ -92,6 +92,14 @@
  * is a property of the dialect and not of either of them, so the port
  * carries the reduction and not the thing it was aimed at.
  *
+ * One behaviour is CHANGED on purpose. The original removed remaining
+ * tags and declarations in a single pass each, so a tag nested inside
+ * another came back joined into a working one (`<<b>script>` became
+ * `<script>`). {@link removeRemainingTags} repeats both until nothing
+ * changes. The parity suite, when armed against the original, reports
+ * these inputs as divergences; that difference is the fix, and the
+ * nested-tag cases in `html-text.test.ts` pin it.
+ *
  * Four behaviours are preserved DELIBERATELY and are worth finding
  * here rather than in a debugger.
  *
@@ -399,6 +407,33 @@ const ANY_TAG_RE = /<\/?[a-zA-Z][^>]*>/g;
 /** A declaration or processing instruction, which carries no prose. */
 const BANG_TAG_RE = /<![^>]*>/g;
 
+/**
+ * Removes every remaining tag and declaration, repeating until the
+ * text stops changing.
+ *
+ * One pass is not enough. A global replace scans once, so removing a
+ * tag nested inside another joins the outer one back together behind
+ * the scan: `<<b>script>` loses its `<b>` and leaves `<script>`. A
+ * declaration does the same (`<<!x>img …>` leaves `<img …>`), which is
+ * why both patterns sit inside the one repeat. Each pass that changes
+ * the text makes it shorter, so the repeat ends.
+ *
+ * @param text - The markup left after the structural passes.
+ * @returns The text with no {@link ANY_TAG_RE} or {@link BANG_TAG_RE}
+ * match left in it.
+ */
+function removeRemainingTags(text: string): string {
+  let previous = text;
+  let current = text.replace(ANY_TAG_RE, '').replace(BANG_TAG_RE, '');
+
+  while (current !== previous) {
+    previous = current;
+    current = current.replace(ANY_TAG_RE, '').replace(BANG_TAG_RE, '');
+  }
+
+  return current;
+}
+
 /** The lowest code point a document may carry as ordinary text. */
 const FIRST_PRINTABLE = 0x20;
 
@@ -678,8 +713,7 @@ export function htmlToText(html: string): string {
     s = s.replace(LIST_ITEM_RE, '\n- ');
     s = s.replace(BLOCK_CLOSE_RE, '\n');
     s = s.replace(BLOCK_OPEN_RE, '\n');
-    s = s.replace(ANY_TAG_RE, '');
-    s = s.replace(BANG_TAG_RE, '');
+    s = removeRemainingTags(s);
 
     return tidyText(decodeHtmlEntities(s));
   } catch {
