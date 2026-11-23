@@ -520,6 +520,81 @@ describe('sanitizeUntrusted — where one pass reaches another', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Cases: tags written to rebuild themselves
+// ---------------------------------------------------------------------------
+
+/**
+ * Tags nested inside tags, each with the answer the module gives.
+ *
+ * A single pass over any of these removes the inner tag and joins
+ * the outer one back together behind the scan, so the answer would
+ * hold a working tag. Each id names the shape it rebuilds.
+ */
+const NESTED_TAGS: readonly { id: string; text: string; answer: string }[] = [
+  {
+    id: 'script, opened and closed',
+    text: '<<b>script>alert(1)<</b>/script>',
+    answer: 'alert(1)',
+  },
+  {
+    id: 'an event-handler attribute',
+    text: '<<img>img src=x onerror=alert(1)>',
+    answer: '',
+  },
+  {
+    id: 'a closing tag around a closing tag',
+    text: 'a <</i>/b> c',
+    answer: 'a  c',
+  },
+  {
+    id: 'three levels deep',
+    text: '<<<i>i>script>x',
+    answer: 'x',
+  },
+  {
+    id: 'a link carrying a script scheme',
+    text: '<<a>a href="javascript:alert(1)">x<</a>/a>',
+    answer: 'x',
+  },
+];
+
+describe('sanitizeUntrusted — tags written to rebuild themselves', () => {
+  for (const nested of NESTED_TAGS) {
+    it(`removes ${nested.id}`, () => {
+      expect(sanitizeUntrusted(nested.text)).toBe(nested.answer);
+    });
+  }
+
+  it('leaves no tag in any answer', () => {
+    const left = NESTED_TAGS
+      .filter((nested) => TAG_RE.test(sanitizeUntrusted(nested.text)))
+      .map((nested) => nested.id);
+
+    expect(left).toEqual([]);
+  });
+
+  // An embed is parked before the tag pass runs, so a tag written
+  // into its alt text or its address would come back with the span,
+  // untouched. Inside a code span a Markdown viewer shows it as text,
+  // but a feed reader decodes the item and renders it as markup.
+  it('removes a tag written into an embed alt text', () => {
+    expect(sanitizeUntrusted('![<img src=x onerror=alert(1)>](https://example.invalid/p.png)'))
+      .toBe('`[image link removed: ](https://example.invalid/p.png)`');
+  });
+
+  it('removes a tag written into an embed address', () => {
+    expect(sanitizeUntrusted('![a](https://example.invalid/<<b>script>.png)'))
+      .toBe('`[image link removed: a](https://example.invalid/.png)`');
+  });
+
+  // The near-misses: a bracket with no letter behind it stays, nested
+  // or not, so the repeat eats no prose a single pass left alone.
+  it('leaves a nested bracket with no letter behind it', () => {
+    expect(sanitizeUntrusted('a << b <3 and <<3>')).toBe('a << b <3 and <<3>');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cases: the shared corpus
 // ---------------------------------------------------------------------------
 
