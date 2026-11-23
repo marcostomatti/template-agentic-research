@@ -20,6 +20,9 @@ on:
         options: [staging, production]
         default: staging
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
